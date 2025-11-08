@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/samples/">
+    <Project Path="ConsoleApp/ConsoleApp.csproj" Id="05e70d8a-d24a-4d1d-92e0-44af1847ba43" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/BrilliantMediator/BrilliantMediator.csproj" Id="d9a9f583-e311-4a9c-b43b-8608d5291f8a" />
   </Folder>

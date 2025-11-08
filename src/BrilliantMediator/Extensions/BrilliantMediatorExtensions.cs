@@ -20,8 +20,14 @@ public static class BrilliantMediatorExtensions
         if (services == null)
             throw new ArgumentNullException(nameof(services));
 
-        // Register Mediator as singleton
-        services.AddSingleton<IMediator, Mediator>();
+        // Register Mediator as singleton with post-initialization
+        services.AddSingleton<IMediator>(provider =>
+        {
+            var mediator = new Mediator();
+            var initializer = provider.GetRequiredService<IMediatorInitializer>();
+            initializer.Initialize(mediator);
+            return mediator;
+        });
 
         // Return builder for fluent registration
         return new MediatorBuilder(services);

@@ -10,8 +10,8 @@ namespace Monbsoft.BrilliantMediator.Tests;
 /// </summary>
 public class CreateTodoCommand : ICommand
 {
-    public required string Title { get; set; }
-    public required string Description { get; set; }
+    public string Title { get; set; }
+    public string Description { get; set; }
 }
 
 /// <summary>
@@ -201,9 +201,13 @@ public class TodoDto
 public interface ITodoRepository
 {
     Task AddAsync(Todo todo);
+
     Task UpdateAsync(Todo todo);
+
     Task<Todo> GetByIdAsync(Guid id);
+
     Task<List<Todo>> GetAllAsync();
+
     Task<int> CountCompletedAsync();
 }
 
@@ -295,4 +299,3 @@ public class Program
         }
     }
 }
-

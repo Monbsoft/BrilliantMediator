@@ -25,5 +25,3 @@ public enum MediatorEventType
     /// </summary>
     Error
 }
-
-

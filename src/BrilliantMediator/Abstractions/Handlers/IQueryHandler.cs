@@ -16,4 +16,3 @@ public interface IQueryHandler<in TQuery, TResponse> where TQuery : IQuery<TResp
     /// <returns>A task that completes with the response when the query is handled.</returns>
     Task<TResponse> Handle(TQuery query);
 }
-

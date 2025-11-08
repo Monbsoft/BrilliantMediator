@@ -145,4 +145,3 @@ public sealed class Mediator : IMediator
         return await handler.Handle(query).ConfigureAwait(false);
     }
 }
-

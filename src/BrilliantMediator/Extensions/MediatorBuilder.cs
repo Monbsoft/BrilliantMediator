@@ -3,11 +3,6 @@ using Monbsoft.BrilliantMediator.Abstractions;
 using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Monbsoft.BrilliantMediator.Abstractions.Handlers;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Monbsoft.BrilliantMediator.Extensions;
 
@@ -18,6 +13,7 @@ namespace Monbsoft.BrilliantMediator.Extensions;
 public sealed class MediatorBuilder
 {
     private readonly IServiceCollection _services;
+    private readonly List<Action<IServiceProvider, IMediator>> _handlerRegistrations = new();
 
     public MediatorBuilder(IServiceCollection services)
     {
@@ -37,13 +33,11 @@ public sealed class MediatorBuilder
             typeof(THandler),
             lifetime));
 
-        // Auto-wire into mediator
-        _services.AddSingleton(provider =>
+        // Store registration action for later execution
+        _handlerRegistrations.Add((provider, mediator) =>
         {
-            var mediator = provider.GetRequiredService<IMediator>();
             var handler = provider.GetRequiredService<ICommandHandler<TCommand>>();
             mediator.RegisterCommandHandler(handler);
-            return mediator;
         });
 
         return this;
@@ -62,13 +56,11 @@ public sealed class MediatorBuilder
             typeof(THandler),
             lifetime));
 
-        // Auto-wire into mediator
-        _services.AddSingleton(provider =>
+        // Store registration action for later execution
+        _handlerRegistrations.Add((provider, mediator) =>
         {
-            var mediator = provider.GetRequiredService<IMediator>();
             var handler = provider.GetRequiredService<ICommandHandler<TCommand, TResponse>>();
             mediator.RegisterCommandHandler(handler);
-            return mediator;
         });
 
         return this;
@@ -87,13 +79,11 @@ public sealed class MediatorBuilder
             typeof(THandler),
             lifetime));
 
-        // Auto-wire into mediator
-        _services.AddSingleton(provider =>
+        // Store registration action for later execution
+        _handlerRegistrations.Add((provider, mediator) =>
         {
-            var mediator = provider.GetRequiredService<IMediator>();
             var handler = provider.GetRequiredService<IQueryHandler<TQuery, TResponse>>();
             mediator.RegisterQueryHandler(handler);
-            return mediator;
         });
 
         return this;
@@ -107,11 +97,10 @@ public sealed class MediatorBuilder
         ICommandHandler<TCommand> handler)
         where TCommand : ICommand
     {
-        _services.AddSingleton(provider =>
+        // Store registration action for later execution
+        _handlerRegistrations.Add((_, mediator) =>
         {
-            var mediator = provider.GetRequiredService<IMediator>();
             mediator.RegisterCommandHandler(handler);
-            return mediator;
         });
 
         return this;
@@ -125,11 +114,10 @@ public sealed class MediatorBuilder
         ICommandHandler<TCommand, TResponse> handler)
         where TCommand : ICommand<TResponse>
     {
-        _services.AddSingleton(provider =>
+        // Store registration action for later execution
+        _handlerRegistrations.Add((_, mediator) =>
         {
-            var mediator = provider.GetRequiredService<IMediator>();
             mediator.RegisterCommandHandler(handler);
-            return mediator;
         });
 
         return this;
@@ -143,11 +131,10 @@ public sealed class MediatorBuilder
         IQueryHandler<TQuery, TResponse> handler)
         where TQuery : IQuery<TResponse>
     {
-        _services.AddSingleton(provider =>
+        // Store registration action for later execution
+        _handlerRegistrations.Add((_, mediator) =>
         {
-            var mediator = provider.GetRequiredService<IMediator>();
             mediator.RegisterQueryHandler(handler);
-            return mediator;
         });
 
         return this;
@@ -158,6 +145,43 @@ public sealed class MediatorBuilder
     /// </summary>
     public IServiceCollection Build()
     {
+        // Register a post-initialization service that will configure the mediator
+        _services.AddSingleton<IMediatorInitializer>(provider =>
+        {
+            return new MediatorInitializer(_handlerRegistrations, provider);
+        });
+
         return _services;
+    }
+}
+
+/// <summary>
+/// Interface for mediator initialization
+/// </summary>
+public interface IMediatorInitializer
+{
+    void Initialize(IMediator mediator);
+}
+
+/// <summary>
+/// Implementation for mediator initialization
+/// </summary>
+internal class MediatorInitializer : IMediatorInitializer
+{
+    private readonly List<Action<IServiceProvider, IMediator>> _registrations;
+    private readonly IServiceProvider _serviceProvider;
+
+    public MediatorInitializer(List<Action<IServiceProvider, IMediator>> registrations, IServiceProvider serviceProvider)
+    {
+        _registrations = registrations;
+        _serviceProvider = serviceProvider;
+    }
+
+    public void Initialize(IMediator mediator)
+    {
+        foreach (var registration in _registrations)
+        {
+            registration(_serviceProvider, mediator);
+        }
     }
 }

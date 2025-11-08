@@ -50,5 +50,3 @@ public sealed class MediatorOptions
             throw new ArgumentException("MaxCachedTypes must be greater than 0", nameof(MaxCachedTypes));
     }
 }
-
-

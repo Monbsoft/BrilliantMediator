@@ -72,5 +72,3 @@ public sealed class MediatorDiagnosticEvent
         };
     }
 }
-
-

@@ -18,7 +18,6 @@ public class TestUnregisteredCommand : ICommand
 {
 }
 
-
 public class TestCommandWithResponse : ICommand<TestResult>
 {
     public int Value { get; set; }
@@ -215,4 +214,3 @@ public class MediatorTests
         Assert.Equal(20, result.Value); // 10 * 2
     }
 }
-
