@@ -1,11 +1,6 @@
-﻿using BrilliantMediator.Abstractions.Queries;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Monbsoft.BrilliantMediator.Abstractions.Queries;
 
-namespace BrilliantMediator.Abstractions.Handlers;
+namespace Monbsoft.BrilliantMediator.Abstractions.Handlers;
 
 /// <summary>
 /// Handler for a query.

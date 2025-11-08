@@ -1,4 +1,4 @@
-﻿namespace BrilliantMediator.Core;
+﻿namespace Monbsoft.BrilliantMediator.Core;
 
 /// <summary>
 /// Represents a diagnostic event from the mediator.

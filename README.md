@@ -101,7 +101,7 @@ Commands represent actions that modify state.
 
 ```csharp
 public class SendEmailCommand : ICommand
-{
+{RadiantMediator.Tests
     public string To { get; set; }
     public string Subject { get; set; }
 }

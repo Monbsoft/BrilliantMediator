@@ -1,20 +1,16 @@
-﻿using BrilliantMediator.Abstractions.Commands;
-using BrilliantMediator.Abstractions.Handlers;
-using BrilliantMediator.Abstractions.Queries;
-using BrilliantMediator.Core.Exceptions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Monbsoft.BrilliantMediator.Abstractions;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
+using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Queries;
+using Monbsoft.BrilliantMediator.Exceptions;
 
-namespace BrilliantMediator.Core;
+namespace Monbsoft.BrilliantMediator.Core;
 
 /// <summary>
 /// Ultra-lightweight, zero-reflection mediator implementation.
 /// Uses compiled generics for maximum performance.
 /// </summary>
-public sealed class Mediator
+public sealed class Mediator : IMediator
 {
     /// <summary>
     /// Registry for command handlers without response.
@@ -22,7 +18,7 @@ public sealed class Mediator
     /// </summary>
     private sealed class CommandHandlerRegistry<TCommand> where TCommand : ICommand
     {
-        public static ICommandHandler<TCommand> Instance { get; set; }
+        public static ICommandHandler<TCommand>? Instance { get; set; }
     }
 
     /// <summary>
@@ -31,7 +27,7 @@ public sealed class Mediator
     /// </summary>
     private sealed class CommandHandlerRegistry<TCommand, TResponse> where TCommand : ICommand<TResponse>
     {
-        public static ICommandHandler<TCommand, TResponse> Instance { get; set; }
+        public static ICommandHandler<TCommand, TResponse>? Instance { get; set; }
     }
 
     /// <summary>
@@ -40,7 +36,7 @@ public sealed class Mediator
     /// </summary>
     private sealed class QueryHandlerRegistry<TQuery, TResponse> where TQuery : IQuery<TResponse>
     {
-        public static IQueryHandler<TQuery, TResponse> Instance { get; set; }
+        public static IQueryHandler<TQuery, TResponse>? Instance { get; set; }
     }
 
     /// <summary>
@@ -102,7 +98,7 @@ public sealed class Mediator
     /// <param name="command">The command to send.</param>
     /// <returns>A task that completes when the command is handled.</returns>
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
-    public async Task Send<TCommand>(TCommand command) where TCommand : ICommand
+    public async Task DispatchAsync<TCommand>(TCommand command) where TCommand : ICommand
     {
         var handler = CommandHandlerRegistry<TCommand>.Instance;
         if (handler == null)
@@ -120,7 +116,7 @@ public sealed class Mediator
     /// <param name="command">The command to send.</param>
     /// <returns>A task that completes with the response when the command is handled.</returns>
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
-    public async Task<TResponse> Send<TCommand, TResponse>(TCommand command)
+    public async Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command)
         where TCommand : ICommand<TResponse>
     {
         var handler = CommandHandlerRegistry<TCommand, TResponse>.Instance;
@@ -132,14 +128,14 @@ public sealed class Mediator
 
     /// <summary>
     /// Sends a query.
-    /// O(1), inlinable by JIT, near-zero overhead.
+
     /// </summary>
     /// <typeparam name="TQuery">The query type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="query">The query to send.</param>
     /// <returns>A task that completes with the response when the query is handled.</returns>
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
-    public async Task<TResponse> Send<TQuery, TResponse>(TQuery query)
+    public async Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query)
         where TQuery : IQuery<TResponse>
     {
         var handler = QueryHandlerRegistry<TQuery, TResponse>.Instance;
