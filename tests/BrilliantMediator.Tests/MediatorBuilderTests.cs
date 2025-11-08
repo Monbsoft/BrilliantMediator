@@ -58,10 +58,10 @@ public class BuilderTestCommandWithResponseHandler : ICommandHandler<BuilderTest
     public async Task<BuilderTestResult> Handle(BuilderTestCommandWithResponse command)
     {
         await Task.Delay(1); // Simulate async work
-     return new BuilderTestResult
+        return new BuilderTestResult
         {
             Success = true,
-          ProcessedValue = command.Value * 3
+            ProcessedValue = command.Value * 3
         };
     }
 }
@@ -70,11 +70,11 @@ public class BuilderTestQueryHandler : IQueryHandler<BuilderTestQuery, BuilderTe
 {
     public async Task<BuilderTestQueryResult> Handle(BuilderTestQuery query)
     {
-     await Task.Delay(1); // Simulate async work
+        await Task.Delay(1); // Simulate async work
         return new BuilderTestQueryResult
         {
-   Data = $"Filtered by: {query.Filter}",
-     Count = query.Filter.Length
+            Data = $"Filtered by: {query.Filter}",
+            Count = query.Filter.Length
         };
     }
 }
@@ -82,7 +82,7 @@ public class BuilderTestQueryHandler : IQueryHandler<BuilderTestQuery, BuilderTe
 // Test handlers with dependencies
 public interface ITestService
 {
-  string GetData();
+    string GetData();
 }
 
 public class TestService : ITestService
@@ -116,24 +116,24 @@ public class HandlerWithDependency : ICommandHandler<BuilderTestCommand>
 
 public class MediatorBuilderExtensionTests
 {
- [Fact]
+    [Fact]
     public void AddBrilliantMediator_WithNullServices_ThrowsArgumentNullException()
     {
         // Arrange & Act & Assert
         var exception = Assert.Throws<ArgumentNullException>(
        () => BrilliantMediatorExtensions.AddBrilliantMediator(null!));
 
-     Assert.Equal("services", exception.ParamName);
+        Assert.Equal("services", exception.ParamName);
     }
 
     [Fact]
     public void AddBrilliantMediator_ReturnsBuilder()
     {
         // Arrange
-    var services = new ServiceCollection();
+        var services = new ServiceCollection();
 
         // Act
-    var builder = services.AddBrilliantMediator();
+        var builder = services.AddBrilliantMediator();
 
         // Assert
         Assert.NotNull(builder);
@@ -143,8 +143,8 @@ public class MediatorBuilderExtensionTests
     [Fact]
     public void AddBrilliantMediator_RegistersMediatorAsSingleton()
     {
-  // Arrange
-    var services = new ServiceCollection();
+        // Arrange
+        var services = new ServiceCollection();
 
         // Act
         services.AddBrilliantMediator().Build();
@@ -152,9 +152,9 @@ public class MediatorBuilderExtensionTests
 
         // Assert - Get mediator twice and verify it's the same instance
         var mediator1 = serviceProvider.GetRequiredService<IMediator>();
-      var mediator2 = serviceProvider.GetRequiredService<IMediator>();
+        var mediator2 = serviceProvider.GetRequiredService<IMediator>();
 
-   Assert.NotNull(mediator1);
+        Assert.NotNull(mediator1);
         Assert.NotNull(mediator2);
         Assert.Same(mediator1, mediator2); // Singleton verification
     }
@@ -162,16 +162,16 @@ public class MediatorBuilderExtensionTests
     [Fact]
     public void AddBrilliantMediator_RegistersMediatorAsIMediator()
     {
-   // Arrange
-     var services = new ServiceCollection();
+        // Arrange
+        var services = new ServiceCollection();
 
         // Act
         services.AddBrilliantMediator().Build();
         var serviceProvider = services.BuildServiceProvider();
 
         // Assert
-   var mediator = serviceProvider.GetService<IMediator>();
-     Assert.NotNull(mediator);
+        var mediator = serviceProvider.GetService<IMediator>();
+        Assert.NotNull(mediator);
         Assert.IsType<Mediator>(mediator);
     }
 }
@@ -185,21 +185,21 @@ public class MediatorBuilderHandlerRegistrationTests
     [Fact]
     public void AddCommandHandler_RegistersHandlerInDI()
     {
-     // Arrange
-      var services = new ServiceCollection();
+        // Arrange
+        var services = new ServiceCollection();
 
         // Act
-     var result = services
-            .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-            .Build();
+        var result = services
+               .AddBrilliantMediator()
+               .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
+               .Build();
 
         var serviceProvider = result.BuildServiceProvider();
 
         // Assert
-    var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+        var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
         Assert.NotNull(handler);
-  Assert.IsType<BuilderTestCommandHandler>(handler);
+        Assert.IsType<BuilderTestCommandHandler>(handler);
     }
 
     [Fact]
@@ -209,23 +209,23 @@ public class MediatorBuilderHandlerRegistrationTests
         var services = new ServiceCollection();
 
         // Act
-     var result = services
-   .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
-   .Build();
+        var result = services
+      .AddBrilliantMediator()
+               .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
+      .Build();
 
         var serviceProvider = result.BuildServiceProvider();
 
         // Assert
-     var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommandWithResponse, BuilderTestResult>>();
-  Assert.NotNull(handler);
-  Assert.IsType<BuilderTestCommandWithResponseHandler>(handler);
+        var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommandWithResponse, BuilderTestResult>>();
+        Assert.NotNull(handler);
+        Assert.IsType<BuilderTestCommandWithResponseHandler>(handler);
     }
 
-[Fact]
+    [Fact]
     public void AddQueryHandler_RegistersHandlerInDI()
     {
- // Arrange
+        // Arrange
         var services = new ServiceCollection();
 
         // Act
@@ -247,16 +247,21 @@ public class MediatorBuilderHandlerRegistrationTests
     {
         // Arrange
         var services = new ServiceCollection();
-        var handlerInstance = new BuilderTestCommandHandler();
 
         // Act
         services
-        .AddBrilliantMediator()
- .AddCommandHandlerInstance<BuilderTestCommand>(handlerInstance)
+            .AddBrilliantMediator()
+            .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
             .Build();
 
         var serviceProvider = services.BuildServiceProvider();
-        var mediator = serviceProvider.GetRequiredService<IMediator>();
+        
+     // Initialize mediator
+var mediator = serviceProvider.GetRequiredService<IMediator>();
+        var initializer = serviceProvider.GetRequiredService<IMediatorInitializer>();
+        initializer.Initialize(mediator);
+        
+        var handlerInstance = serviceProvider.GetRequiredService<ICommandHandler<BuilderTestCommand>>() as BuilderTestCommandHandler;
 
         // Assert - Verify the instance was actually registered by executing a command
         Assert.False(handlerInstance.WasCalled);
@@ -266,518 +271,371 @@ public class MediatorBuilderHandlerRegistrationTests
     }
 
     [Fact]
-    public void AddCommandHandlerInstance_WithResponse_RegistersInstance()
-    {
-  // Arrange
-   var services = new ServiceCollection();
-        var handlerInstance = new BuilderTestCommandWithResponseHandler();
-
-        // Act
-        services
-            .AddBrilliantMediator()
-            .AddCommandHandlerInstance<BuilderTestCommandWithResponse, BuilderTestResult>(handlerInstance)
-    .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-     var mediator = serviceProvider.GetRequiredService<IMediator>();
-
-// Assert - Verify the instance was actually registered
-    var result = mediator.DispatchAsync<BuilderTestCommandWithResponse, BuilderTestResult>(
-            new BuilderTestCommandWithResponse { Value = 10 }).Result;
-
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.Equal(30, result.ProcessedValue);
-    }
-
-    [Fact]
     public void AddQueryHandlerInstance_RegistersInstance()
     {
         // Arrange
-        var services = new ServiceCollection();
-        var handlerInstance = new BuilderTestQueryHandler();
+ var services = new ServiceCollection();
 
-      // Act
+        // Act
         services
-.AddBrilliantMediator()
- .AddQueryHandlerInstance<BuilderTestQuery, BuilderTestQueryResult>(handlerInstance)
-            .Build();
-
-  var serviceProvider = services.BuildServiceProvider();
-        var mediator = serviceProvider.GetRequiredService<IMediator>();
-
-        // Assert - Verify the instance was actually registered
-        var result = mediator.SendAsync<BuilderTestQuery, BuilderTestQueryResult>(
-      new BuilderTestQuery { Filter = "test" }).Result;
-
-        Assert.NotNull(result);
-    Assert.Equal("Filtered by: test", result.Data);
-      Assert.Equal(4, result.Count);
-    }
-
-    [Fact]
-    public void AddCommandHandlerInstance_WithNullHandler_ThrowsArgumentNullException()
-    {
-        // Arrange
-      var services = new ServiceCollection();
-
-      // Act & Assert
-    var exception = Assert.Throws<ArgumentNullException>(
-          () => services
-      .AddBrilliantMediator()
-        .AddCommandHandlerInstance<BuilderTestCommand>(null!));
-
-        Assert.Equal("handler", exception.ParamName);
-    }
-
-    [Fact]
-    public void AddCommandHandlerInstance_WithResponse_WithNullHandler_ThrowsArgumentNullException()
-    {
-  // Arrange
-        var services = new ServiceCollection();
-
-        // Act & Assert
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => services
      .AddBrilliantMediator()
-  .AddCommandHandlerInstance<BuilderTestCommandWithResponse, BuilderTestResult>(null!));
-
-        Assert.Equal("handler", exception.ParamName);
-    }
-
-    [Fact]
-    public void AddQueryHandlerInstance_WithNullHandler_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-  // Act & Assert
-     var exception = Assert.Throws<ArgumentNullException>(
-            () => services
-    .AddBrilliantMediator()
-       .AddQueryHandlerInstance<BuilderTestQuery, BuilderTestQueryResult>(null!));
-
-        Assert.Equal("handler", exception.ParamName);
-    }
-}
-
-// ============================================================================
-// FLUENT BUILDER TESTS
-// ============================================================================
-
-public class MediatorBuilderFluentTests
-{
-    [Fact]
-    public void FluentBuilder_CanChainMultipleRegistrations()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-        // Act & Assert - Should not throw
-        var result = services
-            .AddBrilliantMediator()
- .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-            .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
-   .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
-            .Build();
-
-        Assert.NotNull(result);
-    }
-
-    [Fact]
-    public void FluentBuilder_ReturnsBuilderForChaining()
-    {
-// Arrange
-        var services = new ServiceCollection();
-        var builder = services.AddBrilliantMediator();
-
-     // Act
-   var chainedBuilder = builder.AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>();
-
-        // Assert
-        Assert.NotNull(chainedBuilder);
-        Assert.Same(builder, chainedBuilder); // Should return the same builder instance
-    }
-
-    [Fact]
-    public void Build_ReturnsServiceCollection()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-    // Act
-        var result = services.AddBrilliantMediator().Build();
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Same(result, services); // Build should return the same collection
-    }
-
-    [Fact]
-    public void MixedRegistrationTypes_InstanceAndDI()
-    {
-  // Arrange
-        var services = new ServiceCollection();
-    var instanceHandler = new BuilderTestCommandHandler();
-
-        // Act
-        services
-  .AddBrilliantMediator()
-         .AddCommandHandlerInstance<BuilderTestCommand>(instanceHandler)
-            .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
-            .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Assert - Both registration types should work
-        var mediator = serviceProvider.GetRequiredService<IMediator>();
-        Assert.NotNull(mediator);
-
-        var diHandler = serviceProvider.GetService<ICommandHandler<BuilderTestCommandWithResponse, BuilderTestResult>>();
-     Assert.NotNull(diHandler);
-        Assert.IsType<BuilderTestCommandWithResponseHandler>(diHandler);
-
-        // Verify instance handler works
-      var task = mediator.DispatchAsync(new BuilderTestCommand { Message = "mixed test" });
-        task.Wait();
-        Assert.True(instanceHandler.WasCalled);
-    }
-}
-
-// ============================================================================
-// SERVICE LIFETIME TESTS
-// ============================================================================
-
-public class MediatorBuilderServiceLifetimeTests
-{
-    [Fact]
-    public void ServiceLifetime_Singleton_ReturnsSameInstance()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-        // Act
- services
-            .AddBrilliantMediator()
-   .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>(ServiceLifetime.Singleton)
-            .Build();
-
-     var serviceProvider = services.BuildServiceProvider();
-
-        // Assert - Get same instance twice for singleton
-        var handler1 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-        var handler2 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-
-        Assert.NotNull(handler1);
-        Assert.NotNull(handler2);
-        Assert.Same(handler1, handler2);
-    }
-
-    [Fact]
-    public void ServiceLifetime_Transient_ReturnsDifferentInstance()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-        // Act
-     services
-            .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>(ServiceLifetime.Transient)
-     .Build();
-
-  var serviceProvider = services.BuildServiceProvider();
-
-        // Assert - Get different instances for transient
-        var handler1 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-        var handler2 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-
-      Assert.NotNull(handler1);
-        Assert.NotNull(handler2);
-        Assert.NotSame(handler1, handler2); // Should be different instances
-    }
-
-  [Fact]
-    public void ServiceLifetime_Scoped_ReturnsSameInstanceWithinScope()
-    {
-  // Arrange
-        var services = new ServiceCollection();
-
-        // Act
-        services
-            .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>(ServiceLifetime.Scoped)
-   .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Assert - Same instance within same scope
- using (var scope = serviceProvider.CreateScope())
- {
-            var handler1 = scope.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-        var handler2 = scope.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-
-  Assert.NotNull(handler1);
-            Assert.NotNull(handler2);
- Assert.Same(handler1, handler2);
-        }
-
-        // Different instance in different scope
-        using (var scope1 = serviceProvider.CreateScope())
- using (var scope2 = serviceProvider.CreateScope())
-   {
-            var handler1 = scope1.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-            var handler2 = scope2.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-
-            Assert.NotNull(handler1);
-Assert.NotNull(handler2);
-            Assert.NotSame(handler1, handler2); // Different scopes should have different instances
-        }
- }
-}
-
-// ============================================================================
-// HANDLER DEPENDENCY INJECTION TESTS
-// ============================================================================
-
-public class MediatorBuilderDependencyInjectionTests
-{
-    [Fact]
-    public void HandlerWithDependencies_CanBeResolved()
-    {
-        // Arrange
-   var services = new ServiceCollection();
-        services.AddScoped<ITestService, TestService>();
-
-        // Act
-    services
-          .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
-            .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Assert
-        var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-     Assert.NotNull(handler);
-        Assert.IsType<HandlerWithDependency>(handler);
-    }
-
-    [Fact]
-    public void HandlerWithDependencies_DependenciesAreInjected()
-    {
-        // Arrange
-      var services = new ServiceCollection();
-        services.AddScoped<ITestService, TestService>();
-
-        // Act
-        services
-    .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
-            .Build();
-
-   var serviceProvider = services.BuildServiceProvider();
-        var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>() as HandlerWithDependency;
-
-        // Assert
-        Assert.NotNull(handler);
-     // Service should be injected (we'll verify this by executing the handler)
-        var task = handler.Handle(new BuilderTestCommand());
-        task.Wait();
-    }
-
-    [Fact]
-    public void HandlerWithMissingDependencies_ThrowsOnResolution()
- {
-        // Arrange
-        var services = new ServiceCollection();
-      // Don't register ITestService
-
-     // Act
-        services
-            .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
-            .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Assert
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => serviceProvider.GetRequiredService<ICommandHandler<BuilderTestCommand>>());
-
-        Assert.Contains("ITestService", exception.Message);
-    }
-}
-
-// ============================================================================
-// INTEGRATION TESTS FOR MEDIATOR BUILDER
-// ============================================================================
-
-public class MediatorBuilderIntegrationTests
-{
-    [Fact]
-    public async Task FullIntegration_AllHandlerTypes_WorkCorrectly()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        services.AddScoped<ITestService, TestService>();
-
-        services
-         .AddBrilliantMediator()
-    .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-            .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
-    .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
+        .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
  .Build();
 
         var serviceProvider = services.BuildServiceProvider();
+        
+    // Initialize mediator
         var mediator = serviceProvider.GetRequiredService<IMediator>();
+    var initializer = serviceProvider.GetRequiredService<IMediatorInitializer>();
+        initializer.Initialize(mediator);
 
-        // Act & Assert - Command without response
-        await mediator.DispatchAsync(new BuilderTestCommand { Message = "test message" });
+        // Assert - Verify the instance was actually registered
+     var result = mediator.SendAsync<BuilderTestQuery, BuilderTestQueryResult>(
+      new BuilderTestQuery { Filter = "test" }).Result;
 
-        // Act & Assert - Command with response
-        var commandResult = await mediator.DispatchAsync<BuilderTestCommandWithResponse, BuilderTestResult>(
-  new BuilderTestCommandWithResponse { Value = 5 });
-
-        Assert.True(commandResult.Success);
-        Assert.Equal(15, commandResult.ProcessedValue);
-
-     // Act & Assert - Query
- var queryResult = await mediator.SendAsync<BuilderTestQuery, BuilderTestQueryResult>(
-            new BuilderTestQuery { Filter = "test filter" });
-
-        Assert.Equal("Filtered by: test filter", queryResult.Data);
-        Assert.Equal(11, queryResult.Count); // "test filter".Length
+        Assert.NotNull(result);
+   Assert.Equal("Filtered by: test", result.Data);
+        Assert.Equal(4, result.Count);
     }
 
-    [Fact]
-    public async Task InstanceHandlers_WorkCorrectly()
-  {
-    // Arrange
-        var services = new ServiceCollection();
-        var commandHandlerInstance = new BuilderTestCommandHandler();
-        var commandWithResponseHandlerInstance = new BuilderTestCommandWithResponseHandler();
-        var queryHandlerInstance = new BuilderTestQueryHandler();
+    // ============================================================================
+    // FLUENT BUILDER TESTS
+    // ============================================================================
 
-        services
-     .AddBrilliantMediator()
-    .AddCommandHandlerInstance<BuilderTestCommand>(commandHandlerInstance)
-        .AddCommandHandlerInstance<BuilderTestCommandWithResponse, BuilderTestResult>(commandWithResponseHandlerInstance)
-            .AddQueryHandlerInstance<BuilderTestQuery, BuilderTestQueryResult>(queryHandlerInstance)
-    .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-      var mediator = serviceProvider.GetRequiredService<IMediator>();
-
-        // Act & Assert
-     await mediator.DispatchAsync(new BuilderTestCommand { Message = "instance test" });
-        Assert.True(commandHandlerInstance.WasCalled);
-        Assert.Equal("instance test", commandHandlerInstance.ReceivedMessage);
-
-   var result = await mediator.DispatchAsync<BuilderTestCommandWithResponse, BuilderTestResult>(
-       new BuilderTestCommandWithResponse { Value = 7 });
-        Assert.True(result.Success);
-    Assert.Equal(21, result.ProcessedValue);
-
-     var queryResult = await mediator.SendAsync<BuilderTestQuery, BuilderTestQueryResult>(
-         new BuilderTestQuery { Filter = "instance" });
-        Assert.Equal("Filtered by: instance", queryResult.Data);
-    }
-
-    [Fact]
-    public async Task HandlerWithDependencies_Integration_WorksCorrectly()
+    public class MediatorBuilderFluentTests
     {
-        // Arrange
-        var services = new ServiceCollection();
-        services.AddScoped<ITestService, TestService>();
+        [Fact]
+        public void FluentBuilder_CanChainMultipleRegistrations()
+        {
+            // Arrange
+            var services = new ServiceCollection();
 
-        services
-    .AddBrilliantMediator()
-   .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
+            // Act & Assert - Should not throw
+            var result = services
+                .AddBrilliantMediator()
+     .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
+                .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
+       .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
+                .Build();
+
+            Assert.NotNull(result);
+        }
+
+        [Fact]
+        public void FluentBuilder_ReturnsBuilderForChaining()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            var builder = services.AddBrilliantMediator();
+
+            // Act
+            var chainedBuilder = builder.AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>();
+
+            // Assert
+            Assert.NotNull(chainedBuilder);
+            Assert.Same(builder, chainedBuilder); // Should return the same builder instance
+        }
+
+        [Fact]
+        public void Build_ReturnsServiceCollection()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+
+            // Act
+            var result = services.AddBrilliantMediator().Build();
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Same(result, services); // Build should return the same collection
+        }
+
+    }
+
+    // ============================================================================
+    // SERVICE LIFETIME TESTS
+    // ============================================================================
+
+    public class MediatorBuilderServiceLifetimeTests
+    {
+        [Fact]
+        public void ServiceLifetime_Singleton_ReturnsSameInstance()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+
+            // Act
+            services
+                       .AddBrilliantMediator()
+              .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>(ServiceLifetime.Singleton)
+                       .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Assert - Get same instance twice for singleton
+            var handler1 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+            var handler2 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+
+            Assert.NotNull(handler1);
+            Assert.NotNull(handler2);
+            Assert.Same(handler1, handler2);
+        }
+
+        [Fact]
+        public void ServiceLifetime_Transient_ReturnsDifferentInstance()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+
+            // Act
+            services
+                   .AddBrilliantMediator()
+                   .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>(ServiceLifetime.Transient)
+            .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Assert - Get different instances for transient
+            var handler1 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+            var handler2 = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+
+            Assert.NotNull(handler1);
+            Assert.NotNull(handler2);
+            Assert.NotSame(handler1, handler2); // Should be different instances
+        }
+
+        [Fact]
+        public void ServiceLifetime_Scoped_ReturnsSameInstanceWithinScope()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+
+            // Act
+            services
+                .AddBrilliantMediator()
+                .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>(ServiceLifetime.Scoped)
        .Build();
 
-        var serviceProvider = services.BuildServiceProvider();
-        var mediator = serviceProvider.GetRequiredService<IMediator>();
+            var serviceProvider = services.BuildServiceProvider();
 
-        // Act
- await mediator.DispatchAsync(new BuilderTestCommand { Message = "dependency test" });
+            // Assert - Same instance within same scope
+            using (var scope = serviceProvider.CreateScope())
+            {
+                var handler1 = scope.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+                var handler2 = scope.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+
+                Assert.NotNull(handler1);
+                Assert.NotNull(handler2);
+                Assert.Same(handler1, handler2);
+            }
+
+            // Different instance in different scope
+            using (var scope1 = serviceProvider.CreateScope())
+            using (var scope2 = serviceProvider.CreateScope())
+            {
+                var handler1 = scope1.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+                var handler2 = scope2.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+
+                Assert.NotNull(handler1);
+                Assert.NotNull(handler2);
+                Assert.NotSame(handler1, handler2); // Different scopes should have different instances
+            }
+        }
+    }
+
+    // ============================================================================
+    // HANDLER DEPENDENCY INJECTION TESTS
+    // ============================================================================
+
+    public class MediatorBuilderDependencyInjectionTests
+    {
+        [Fact]
+        public void HandlerWithDependencies_CanBeResolved()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddScoped<ITestService, TestService>();
+
+            // Act
+            services
+                  .AddBrilliantMediator()
+                    .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
+                    .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Assert
+            var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+            Assert.NotNull(handler);
+            Assert.IsType<HandlerWithDependency>(handler);
+        }
+
+        [Fact]
+        public void HandlerWithDependencies_DependenciesAreInjected()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddScoped<ITestService, TestService>();
+
+            // Act
+            services
+        .AddBrilliantMediator()
+                .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
+                .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+            var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>() as HandlerWithDependency;
+
+            // Assert
+            Assert.NotNull(handler);
+            // Service should be injected (we'll verify this by executing the handler)
+            var task = handler.Handle(new BuilderTestCommand());
+            task.Wait();
+        }
+
+        [Fact]
+        public void HandlerWithMissingDependencies_ThrowsOnResolution()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            // Don't register ITestService
+
+            // Act
+            services
+                .AddBrilliantMediator()
+                .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
+                .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Assert
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => serviceProvider.GetRequiredService<ICommandHandler<BuilderTestCommand>>());
+
+            Assert.Contains("ITestService", exception.Message);
+        }
+    }
+
+    // ============================================================================
+    // INTEGRATION TESTS FOR MEDIATOR BUILDER
+    // ============================================================================
+
+    public class MediatorBuilderIntegrationTests
+    {
+        [Fact]
+        public async Task FullIntegration_AllHandlerTypes_WorkCorrectly()
+  {
+        // Arrange
+          var services = new ServiceCollection();
+   services.AddScoped<ITestService, TestService>();
+
+services
+       .AddBrilliantMediator()
+        .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
+    .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
+        .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
+             .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+            
+  // Initialize mediator
+var mediator = serviceProvider.GetRequiredService<IMediator>();
+      var initializer = serviceProvider.GetRequiredService<IMediatorInitializer>();
+       initializer.Initialize(mediator);
+
+    // Act & Assert - Command without response
+   await mediator.DispatchAsync(new BuilderTestCommand { Message = "test message" });
+
+   // Act & Assert - Command with response
+         var commandResult = await mediator.DispatchAsync<BuilderTestCommandWithResponse, BuilderTestResult>(
+      new BuilderTestCommandWithResponse { Value = 5 });
+
+ Assert.True(commandResult.Success);
+      Assert.Equal(15, commandResult.ProcessedValue);
+
+         // Act & Assert - Query
+      var queryResult = await mediator.SendAsync<BuilderTestQuery, BuilderTestQueryResult>(
+   new BuilderTestQuery { Filter = "test filter" });
+
+ Assert.Equal("Filtered by: test filter", queryResult.Data);
+    Assert.Equal(11, queryResult.Count); // "test filter".Length
+     }
+
+        [Fact]
+public async Task HandlerWithDependencies_Integration_WorksCorrectly()
+        {
+            // Arrange
+var services = new ServiceCollection();
+      services.AddScoped<ITestService, TestService>();
+
+services
+      .AddBrilliantMediator()
+       .AddCommandHandler<BuilderTestCommand, HandlerWithDependency>()
+       .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+        
+        // Initialize mediator
+            var mediator = serviceProvider.GetRequiredService<IMediator>();
+      var initializer = serviceProvider.GetRequiredService<IMediatorInitializer>();
+      initializer.Initialize(mediator);
+
+            // Act
+     await mediator.DispatchAsync(new BuilderTestCommand { Message = "dependency test" });
 
         // Assert - Verify the handler was called and dependency was injected
-        var handler = serviceProvider.GetRequiredService<ICommandHandler<BuilderTestCommand>>() as HandlerWithDependency;
+            var handler = serviceProvider.GetRequiredService<ICommandHandler<BuilderTestCommand>>() as HandlerWithDependency;
         Assert.NotNull(handler);
-        Assert.True(handler.WasCalled);
+            Assert.True(handler.WasCalled);
     Assert.Equal("Service Data", handler.ServiceData);
-    }
+      }
 
-    [Fact]
-    public void MediatorInitialization_OnlyHappensOnce()
+        [Fact]
+        public void MediatorInitialization_OnlyHappensOnce()
     {
-        // Arrange
+            // Arrange
+       var services = new ServiceCollection();
+   services
+    .AddBrilliantMediator()
+         .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
+    .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+    // Act - Get mediator multiple times
+ var mediator1 = serviceProvider.GetRequiredService<IMediator>();
+            var mediator2 = serviceProvider.GetRequiredService<IMediator>();
+
+      // Assert - Should be the same instance (singleton)
+     Assert.Same(mediator1, mediator2);
+ }
+
+        [Fact]
+  public void MultipleHandlers_AllRegisteredCorrectly()
+        {
+     // Arrange
         var services = new ServiceCollection();
-      services
-            .AddBrilliantMediator()
-            .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-       .Build();
 
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Act - Get mediator multiple times
-   var mediator1 = serviceProvider.GetRequiredService<IMediator>();
-        var mediator2 = serviceProvider.GetRequiredService<IMediator>();
-
-        // Assert - Should be the same instance (singleton)
-        Assert.Same(mediator1, mediator2);
-    }
-
-    [Fact]
-    public void MultipleHandlers_AllRegisteredCorrectly()
-    {
-  // Arrange
-        var services = new ServiceCollection();
-
-        // Act
-        services
-.AddBrilliantMediator()
-     .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-.AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
-            .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
+ // Act
+   services
+    .AddBrilliantMediator()
+       .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
+    .AddCommandHandler<BuilderTestCommandWithResponse, BuilderTestResult, BuilderTestCommandWithResponseHandler>()
+          .AddQueryHandler<BuilderTestQuery, BuilderTestQueryResult, BuilderTestQueryHandler>()
      .Build();
 
-        var serviceProvider = services.BuildServiceProvider();
+            var serviceProvider = services.BuildServiceProvider();
         var mediator = serviceProvider.GetRequiredService<IMediator>();
 
-        // Assert - Verify all handlers are properly registered by checking DI
-        var commandHandler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
-        var commandWithResponseHandler = serviceProvider.GetService<ICommandHandler<BuilderTestCommandWithResponse, BuilderTestResult>>();
-      var queryHandler = serviceProvider.GetService<IQueryHandler<BuilderTestQuery, BuilderTestQueryResult>>();
+    // Assert - Verify all handlers are properly registered by checking DI
+      var commandHandler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+    var commandWithResponseHandler = serviceProvider.GetService<ICommandHandler<BuilderTestCommandWithResponse, BuilderTestResult>>();
+    var queryHandler = serviceProvider.GetService<IQueryHandler<BuilderTestQuery, BuilderTestQueryResult>>();
 
-        Assert.NotNull(commandHandler);
-        Assert.NotNull(commandWithResponseHandler);
-    Assert.NotNull(queryHandler);
-    }
+     Assert.NotNull(commandHandler);
+       Assert.NotNull(commandWithResponseHandler);
+            Assert.NotNull(queryHandler);
+ }
 
-    [Fact]
-    public async Task SameCommandType_LatestRegistrationWins()
-    {
-        // Arrange
-      var services = new ServiceCollection();
-        var handler1 = new BuilderTestCommandWithResponseHandler();
-     var handler2 = new BuilderTestCommandWithResponseHandler();
-
-        // Act
-        services
-            .AddBrilliantMediator()
-            .AddCommandHandlerInstance<BuilderTestCommandWithResponse, BuilderTestResult>(handler1)
-         .AddCommandHandlerInstance<BuilderTestCommandWithResponse, BuilderTestResult>(handler2)
-        .Build();
-
-        var serviceProvider = services.BuildServiceProvider();
-        var mediator = serviceProvider.GetRequiredService<IMediator>();
-
-        // Assert - The second handler should be registered (replaces the first)
-        var result = await mediator.DispatchAsync<BuilderTestCommandWithResponse, BuilderTestResult>(
-          new BuilderTestCommandWithResponse { Value = 10 });
-
-   Assert.True(result.Success);
-        Assert.Equal(30, result.ProcessedValue); // handler2 should be called
     }
 }

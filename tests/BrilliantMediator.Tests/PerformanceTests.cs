@@ -77,13 +77,23 @@ public class FastQueryHandler : IQueryHandler<PerfTestQuery, PerfTestQueryResult
 public class PerformanceBenchmarkTests
 {
     private readonly Mediator _mediator;
+    private readonly TestServiceProvider _serviceProvider;
 
     public PerformanceBenchmarkTests()
     {
-        _mediator = new Mediator();
-        _mediator.RegisterCommandHandler<PerfTestCommand>(new FastCommandHandler());
-        _mediator.RegisterCommandHandler<PerfTestCommandWithResponse, PerfTestResult>(new FastCommandWithResponseHandler());
-        _mediator.RegisterQueryHandler<PerfTestQuery, PerfTestQueryResult>(new FastQueryHandler());
+        (_mediator, _serviceProvider) = TestMediatorFactory.Create();
+        
+        var fastCommandHandler = new FastCommandHandler();
+    var fastCommandWithResponseHandler = new FastCommandWithResponseHandler();
+        var fastQueryHandler = new FastQueryHandler();
+        
+        _serviceProvider.AddCommandHandler(fastCommandHandler);
+   _serviceProvider.AddCommandHandler<PerfTestCommandWithResponse, PerfTestResult>(fastCommandWithResponseHandler);
+        _serviceProvider.AddQueryHandler<PerfTestQuery, PerfTestQueryResult>(fastQueryHandler);
+  
+        _mediator.RegisterCommandHandler<PerfTestCommand>(fastCommandHandler);
+   _mediator.RegisterCommandHandler<PerfTestCommandWithResponse, PerfTestResult>(fastCommandWithResponseHandler);
+      _mediator.RegisterQueryHandler<PerfTestQuery, PerfTestQueryResult>(fastQueryHandler);
     }
 
     [Fact]
@@ -271,23 +281,31 @@ public class PerformanceBenchmarkTests
     public void HandlerRegistration_BulkRegistration_PerformsQuickly()
     {
         // Arrange
-        const int registrations = 1000;
+    const int registrations = 1000;
         var stopwatch = Stopwatch.StartNew();
 
-        // Act
-        for (int i = 0; i < registrations; i++)
+// Act
+    for (int i = 0; i < registrations; i++)
         {
-            var mediator = new Mediator();
-            mediator.RegisterCommandHandler<PerfTestCommand>(new FastCommandHandler());
-            mediator.RegisterCommandHandler<PerfTestCommandWithResponse, PerfTestResult>(new FastCommandWithResponseHandler());
-            mediator.RegisterQueryHandler<PerfTestQuery, PerfTestQueryResult>(new FastQueryHandler());
-        }
+  var (mediator, serviceProvider) = TestMediatorFactory.Create();
+var handler1 = new FastCommandHandler();
+      var handler2 = new FastCommandWithResponseHandler();
+      var handler3 = new FastQueryHandler();
+        
+            serviceProvider.AddCommandHandler(handler1);
+       serviceProvider.AddCommandHandler<PerfTestCommandWithResponse, PerfTestResult>(handler2);
+       serviceProvider.AddQueryHandler<PerfTestQuery, PerfTestQueryResult>(handler3);
+    
+    mediator.RegisterCommandHandler<PerfTestCommand>(handler1);
+        mediator.RegisterCommandHandler<PerfTestCommandWithResponse, PerfTestResult>(handler2);
+  mediator.RegisterQueryHandler<PerfTestQuery, PerfTestQueryResult>(handler3);
+  }
 
         // Assert
         stopwatch.Stop();
 
-        // Handler registration should be very fast (O(1))
-        Assert.True(stopwatch.ElapsedMilliseconds < 100,
+    // Handler registration should be very fast (O(1))
+    Assert.True(stopwatch.ElapsedMilliseconds < 100,
      $"1000 handler registrations took {stopwatch.ElapsedMilliseconds}ms (expected < 100ms)");
     }
 

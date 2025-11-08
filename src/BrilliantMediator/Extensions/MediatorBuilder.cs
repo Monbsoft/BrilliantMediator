@@ -1,8 +1,11 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Monbsoft.BrilliantMediator.Abstractions;
 using Monbsoft.BrilliantMediator.Abstractions.Commands;
+using Monbsoft.BrilliantMediator.Abstractions.Events;
 using Monbsoft.BrilliantMediator.Abstractions.Handlers;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
+using System.Reflection;
 
 namespace Monbsoft.BrilliantMediator.Extensions;
 
@@ -29,15 +32,14 @@ public sealed class MediatorBuilder
         where THandler : class, ICommandHandler<TCommand>
     {
         _services.Add(new ServiceDescriptor(
-            typeof(ICommandHandler<TCommand>),
-            typeof(THandler),
-            lifetime));
+        typeof(ICommandHandler<TCommand>),
+          typeof(THandler),
+  lifetime));
 
-        // Store registration action for later execution
+      // Store registration action for later execution
         _handlerRegistrations.Add((provider, mediator) =>
         {
-            var handler = provider.GetRequiredService<ICommandHandler<TCommand>>();
-            mediator.RegisterCommandHandler(handler);
+          mediator.RegisterCommandHandler<TCommand>();
         });
 
         return this;
@@ -48,20 +50,19 @@ public sealed class MediatorBuilder
     /// Zero reflection, compile-time safe.
     /// </summary>
     public MediatorBuilder AddCommandHandler<TCommand, TResponse, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
-        where TCommand : ICommand<TResponse>
+ where TCommand : ICommand<TResponse>
         where THandler : class, ICommandHandler<TCommand, TResponse>
     {
         _services.Add(new ServiceDescriptor(
-            typeof(ICommandHandler<TCommand, TResponse>),
-            typeof(THandler),
-            lifetime));
+       typeof(ICommandHandler<TCommand, TResponse>),
+          typeof(THandler),
+             lifetime));
 
         // Store registration action for later execution
-        _handlerRegistrations.Add((provider, mediator) =>
+     _handlerRegistrations.Add((provider, mediator) =>
         {
-            var handler = provider.GetRequiredService<ICommandHandler<TCommand, TResponse>>();
-            mediator.RegisterCommandHandler(handler);
-        });
+        mediator.RegisterCommandHandler<TCommand, TResponse>();
+     });
 
         return this;
     }
@@ -71,82 +72,257 @@ public sealed class MediatorBuilder
     /// Zero reflection, compile-time safe.
     /// </summary>
     public MediatorBuilder AddQueryHandler<TQuery, TResponse, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
-        where TQuery : IQuery<TResponse>
-        where THandler : class, IQueryHandler<TQuery, TResponse>
+    where TQuery : IQuery<TResponse>
+      where THandler : class, IQueryHandler<TQuery, TResponse>
     {
         _services.Add(new ServiceDescriptor(
-            typeof(IQueryHandler<TQuery, TResponse>),
-            typeof(THandler),
+     typeof(IQueryHandler<TQuery, TResponse>),
+     typeof(THandler),
             lifetime));
 
         // Store registration action for later execution
         _handlerRegistrations.Add((provider, mediator) =>
         {
-            var handler = provider.GetRequiredService<IQueryHandler<TQuery, TResponse>>();
-            mediator.RegisterQueryHandler(handler);
+    mediator.RegisterQueryHandler<TQuery, TResponse>();
+        });
+
+        return this;
+ }
+
+    /// <summary>
+    /// Registers an event handler.
+    /// Zero reflection, compile-time safe.
+    /// Multiple handlers can be registered for the same event.
+    /// </summary>
+    public MediatorBuilder AddEventHandler<TEvent, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    where TEvent : IEvent
+      where THandler : class, IEventHandler<TEvent>
+    {
+     _services.Add(new ServiceDescriptor(
+   typeof(IEventHandler<TEvent>),
+      typeof(THandler),
+            lifetime));
+
+        // Store registration action for later execution
+        _handlerRegistrations.Add((provider, mediator) =>
+     {
+            mediator.RegisterEventHandler<TEvent>();
         });
 
         return this;
     }
 
     /// <summary>
-    /// Registers a command handler instance directly.
-    /// Zero reflection, no DI lookup.
+    /// Automatically discovers and registers all handlers in the specified assembly.
+    /// Supports ICommandHandler, ICommandHandler&lt;TResponse&gt;, IQueryHandler, and IEventHandler implementations.
     /// </summary>
-    public MediatorBuilder AddCommandHandlerInstance<TCommand>(
-        ICommandHandler<TCommand> handler)
+    /// <param name="assembly">The assembly to scan for handlers.</param>
+    /// <param name="lifetime">The service lifetime for registered handlers.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if assembly is null.</exception>
+    public MediatorBuilder AddHandlersFromAssembly(Assembly assembly, ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    {
+        if (assembly == null)
+            throw new ArgumentNullException(nameof(assembly));
+
+        var types = assembly.GetTypes();
+
+        foreach (var type in types)
+        {
+            if (type.IsAbstract || type.IsInterface)
+                continue;
+
+            var interfaces = type.GetInterfaces();
+
+            foreach (var interfaceType in interfaces)
+            {
+                if (!interfaceType.IsGenericType)
+                    continue;
+
+                var genericDefinition = interfaceType.GetGenericTypeDefinition();
+
+                // Handle ICommandHandler<TCommand>
+                if (genericDefinition == typeof(ICommandHandler<>))
+                {
+                    var commandType = interfaceType.GetGenericArguments()[0];
+                    RegisterCommandHandlerType(type, interfaceType, commandType, lifetime);
+                }
+                // Handle ICommandHandler<TCommand, TResponse>
+                else if (genericDefinition == typeof(ICommandHandler<,>))
+                {
+                    var args = interfaceType.GetGenericArguments();
+                    var commandType = args[0];
+                    var responseType = args[1];
+                    RegisterCommandHandlerWithResponseType(type, interfaceType, commandType, responseType, lifetime);
+                }
+                // Handle IQueryHandler<TQuery, TResponse>
+                else if (genericDefinition == typeof(IQueryHandler<,>))
+                {
+                    var args = interfaceType.GetGenericArguments();
+                    var queryType = args[0];
+                    var responseType = args[1];
+                    RegisterQueryHandlerType(type, interfaceType, queryType, responseType, lifetime);
+                }
+                // Handle IEventHandler<TEvent>
+                else if (genericDefinition == typeof(IEventHandler<>))
+                {
+                    var eventType = interfaceType.GetGenericArguments()[0];
+                    RegisterEventHandlerType(type, interfaceType, eventType, lifetime);
+                }
+            }
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Automatically discovers and registers all handlers from multiple assemblies.
+    /// </summary>
+    /// <param name="assemblies">The assemblies to scan for handlers.</param>
+    /// <param name="lifetime">The service lifetime for registered handlers.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    public MediatorBuilder AddHandlersFromAssemblies(IEnumerable<Assembly> assemblies, ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    {
+        if (assemblies == null)
+            throw new ArgumentNullException(nameof(assemblies));
+
+        foreach (var assembly in assemblies)
+        {
+            AddHandlersFromAssembly(assembly, lifetime);
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Automatically discovers and registers all handlers from assemblies matching the given names.
+    /// </summary>
+    /// <param name="assemblyNames">The names of the assemblies to load and scan.</param>
+    /// <param name="lifetime">The service lifetime for registered handlers.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    public MediatorBuilder AddHandlersFromAssemblyNames(IEnumerable<string> assemblyNames, ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    {
+        if (assemblyNames == null)
+            throw new ArgumentNullException(nameof(assemblyNames));
+
+        var assemblies = assemblyNames
+     .Select(name => Assembly.Load(name))
+      .ToList();
+
+        return AddHandlersFromAssemblies(assemblies, lifetime);
+    }
+
+    private void RegisterCommandHandlerType(Type handlerType, Type interfaceType, Type commandType, ServiceLifetime lifetime)
+    {
+        _services.Add(new ServiceDescriptor(interfaceType, handlerType, lifetime));
+
+        var registerMethod = typeof(MediatorBuilder)
+    .GetMethod(nameof(RegisterCommandHandlerGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+       .MakeGenericMethod(commandType);
+
+        _handlerRegistrations.Add((provider, mediator) =>
+       {
+           registerMethod.Invoke(null, new object[] { provider, mediator, handlerType });
+       });
+    }
+
+    private void RegisterCommandHandlerWithResponseType(Type handlerType, Type interfaceType, Type commandType, Type responseType, ServiceLifetime lifetime)
+    {
+        _services.Add(new ServiceDescriptor(interfaceType, handlerType, lifetime));
+
+        var registerMethod = typeof(MediatorBuilder)
+.GetMethod(nameof(RegisterCommandHandlerGenericWithResponse), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(commandType, responseType);
+
+        _handlerRegistrations.Add((provider, mediator) =>
+             {
+                 registerMethod.Invoke(null, new object[] { provider, mediator, handlerType });
+             });
+    }
+
+    private void RegisterQueryHandlerType(Type handlerType, Type interfaceType, Type queryType, Type responseType, ServiceLifetime lifetime)
+    {
+        _services.Add(new ServiceDescriptor(interfaceType, handlerType, lifetime));
+
+        var registerMethod = typeof(MediatorBuilder)
+            .GetMethod(nameof(RegisterQueryHandlerGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+     .MakeGenericMethod(queryType, responseType);
+
+        _handlerRegistrations.Add((provider, mediator) =>
+        {
+            registerMethod.Invoke(null, new object[] { provider, mediator, handlerType });
+        });
+    }
+
+    private void RegisterEventHandlerType(Type handlerType, Type interfaceType, Type eventType, ServiceLifetime lifetime)
+    {
+        _services.Add(new ServiceDescriptor(interfaceType, handlerType, lifetime));
+
+        var registerMethod = typeof(MediatorBuilder)
+            .GetMethod(nameof(RegisterEventHandlerGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(eventType);
+
+        _handlerRegistrations.Add((provider, mediator) =>
+        {
+            registerMethod.Invoke(null, new object[] { provider, mediator, handlerType });
+        });
+    }
+
+    private static void RegisterCommandHandlerGeneric<TCommand>(IServiceProvider provider, IMediator mediator, Type handlerType)
         where TCommand : ICommand
-    {
-        if (handler == null)
-            throw new ArgumentNullException(nameof(handler));
-
-        // Store registration action for later execution
-        _handlerRegistrations.Add((_, mediator) =>
-        {
-            mediator.RegisterCommandHandler(handler);
-        });
-
-        return this;
+  {
+   mediator.RegisterCommandHandler<TCommand>();
     }
 
-    /// <summary>
-    /// Registers a command handler instance directly with response.
-    /// Zero reflection, no DI lookup.
-    /// </summary>
-    public MediatorBuilder AddCommandHandlerInstance<TCommand, TResponse>(
-        ICommandHandler<TCommand, TResponse> handler)
-        where TCommand : ICommand<TResponse>
+    private static void RegisterCommandHandlerGenericWithResponse<TCommand, TResponse>(IServiceProvider provider, IMediator mediator, Type handlerType)
+  where TCommand : ICommand<TResponse>
     {
-        if (handler == null)
-            throw new ArgumentNullException(nameof(handler));
-
-        // Store registration action for later execution
-        _handlerRegistrations.Add((_, mediator) =>
-        {
-            mediator.RegisterCommandHandler(handler);
-        });
-
-        return this;
+   mediator.RegisterCommandHandler<TCommand, TResponse>();
     }
 
-    /// <summary>
-    /// Registers a query handler instance directly.
-    /// Zero reflection, no DI lookup.
-    /// </summary>
-    public MediatorBuilder AddQueryHandlerInstance<TQuery, TResponse>(
-        IQueryHandler<TQuery, TResponse> handler)
+    private static void RegisterQueryHandlerGeneric<TQuery, TResponse>(IServiceProvider provider, IMediator mediator, Type handlerType)
         where TQuery : IQuery<TResponse>
     {
-        if (handler == null)
-            throw new ArgumentNullException(nameof(handler));
+ mediator.RegisterQueryHandler<TQuery, TResponse>();
+    }
 
-        // Store registration action for later execution
-        _handlerRegistrations.Add((_, mediator) =>
-        {
-            mediator.RegisterQueryHandler(handler);
-        });
+    private static void RegisterEventHandlerGeneric<TEvent>(IServiceProvider provider, IMediator mediator, Type handlerType)
+        where TEvent : IEvent
+    {
+        mediator.RegisterEventHandler<TEvent>();
+    }
 
-        return this;
+ // Delegate-based handler implementations for registration
+  private sealed class DelegateCommandHandler<TCommand> : ICommandHandler<TCommand>
+        where TCommand : ICommand
+    {
+        private readonly Func<TCommand, Task> _handler;
+        public DelegateCommandHandler(Func<TCommand, Task> handler) => _handler = handler;
+        public Task Handle(TCommand command) => _handler(command);
+    }
+
+    private sealed class DelegateCommandHandler<TCommand, TResponse> : ICommandHandler<TCommand, TResponse>
+        where TCommand : ICommand<TResponse>
+    {
+      private readonly Func<TCommand, Task<TResponse>> _handler;
+        public DelegateCommandHandler(Func<TCommand, Task<TResponse>> handler) => _handler = handler;
+        public Task<TResponse> Handle(TCommand command) => _handler(command);
+    }
+
+    private sealed class DelegateQueryHandler<TQuery, TResponse> : IQueryHandler<TQuery, TResponse>
+        where TQuery : IQuery<TResponse>
+    {
+        private readonly Func<TQuery, Task<TResponse>> _handler;
+        public DelegateQueryHandler(Func<TQuery, Task<TResponse>> handler) => _handler = handler;
+        public Task<TResponse> Handle(TQuery query) => _handler(query);
+    }
+
+    private sealed class DelegateEventHandler<TEvent> : IEventHandler<TEvent>
+ where TEvent : IEvent
+    {
+        private readonly Func<TEvent, Task> _handler;
+     public DelegateEventHandler(Func<TEvent, Task> handler) => _handler = handler;
+public Task Handle(TEvent @event) => _handler(@event);
     }
 
     /// <summary>
@@ -156,9 +332,9 @@ public sealed class MediatorBuilder
     {
         // Register a post-initialization service that will configure the mediator
         _services.AddSingleton<IMediatorInitializer>(provider =>
-        {
-            return new MediatorInitializer(_handlerRegistrations, provider);
-        });
+    {
+          return new MediatorInitializer(_handlerRegistrations, provider);
+      });
 
         return _services;
     }
@@ -188,9 +364,10 @@ internal class MediatorInitializer : IMediatorInitializer
 
     public void Initialize(IMediator mediator)
     {
+    // No need for a scope - we're just registering types, not resolving handlers
         foreach (var registration in _registrations)
-        {
-            registration(_serviceProvider, mediator);
-        }
+{
+  registration(_serviceProvider, mediator);
+ }
     }
 }

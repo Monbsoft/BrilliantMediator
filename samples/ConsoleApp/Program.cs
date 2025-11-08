@@ -1,4 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Monbsoft.BrilliantMediator.Abstractions;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
+using Monbsoft.BrilliantMediator.Abstractions.Handlers;
 using Monbsoft.BrilliantMediator.Extensions;
 using Radiant.ConsoleApp.Application.Commands;
 using Radiant.ConsoleApp.Application.DTOs;
@@ -17,7 +20,7 @@ var repository = new InMemoryTodoRepository();
 services
     .AddSingleton<ITodoRepository>(repository)
     .AddTransient<TodoService>()
-    .AddBrilliantMediator()
+    .AddBrilliantMediator()    
     .AddCommandHandler<CreateTodoCommand, CreateTodoResult, CreateTodoCommandHandler>()
     .AddCommandHandler<CompleteTodoCommand, CompleteTodoResult, CompleteTodoCommandHandler>()
     .AddCommandHandler<DeleteTodoCommand, DeleteTodoCommandHandler>()
@@ -27,7 +30,10 @@ services
     .Build();
 
 var provider = services.BuildServiceProvider();
-var mediator = provider.GetRequiredService<Monbsoft.BrilliantMediator.Abstractions.IMediator>();
+var mediator = provider.GetRequiredService<IMediator>();
+var initializer = provider.GetRequiredService<IMediatorInitializer>();
+initializer.Initialize(mediator);
+
 var todoService = provider.GetService<TodoService>();
 
 // Demo

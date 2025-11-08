@@ -1,4 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+﻿using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Radiant.ConsoleApp.Application.Commands;
 using Radiant.ConsoleApp.Application.Domain;
 using Radiant.ConsoleApp.Application.Interfaces;

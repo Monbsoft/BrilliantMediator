@@ -1,6 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Commands;
-
-namespace Monbsoft.BrilliantMediator.Abstractions.Handlers;
+﻿namespace Monbsoft.BrilliantMediator.Abstractions.Commands;
 
 /// <summary>
 /// Handler for a command that does not return a response.

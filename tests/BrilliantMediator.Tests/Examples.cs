@@ -255,14 +255,23 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        var mediator = new Mediator();
+        var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var repository = new InMemoryTodoRepository();
 
+        // Create handlers
+        var createTodoHandler = new CreateTodoCommandHandler(repository);
+        var completeTodoHandler = new CompleteTodoCommandHandler(repository);
+        var getAllTodosHandler = new GetAllTodosQueryHandler(repository);
+
+        // Add to service provider
+        serviceProvider.AddCommandHandler(createTodoHandler);
+        serviceProvider.AddCommandHandler<CompleteTodoCommand, CompleteTodoResult>(completeTodoHandler);
+        serviceProvider.AddQueryHandler<GetAllTodosQuery, GetAllTodosResult>(getAllTodosHandler);
+
         // Register handlers
-        mediator.RegisterCommandHandler(new CreateTodoCommandHandler(repository));
-        mediator.RegisterCommandHandler<CompleteTodoCommand, CompleteTodoResult>(
-            new CompleteTodoCommandHandler(repository));
-        mediator.RegisterQueryHandler(new GetAllTodosQueryHandler(repository));
+        mediator.RegisterCommandHandler(createTodoHandler);
+        mediator.RegisterCommandHandler<CompleteTodoCommand, CompleteTodoResult>(completeTodoHandler);
+        mediator.RegisterQueryHandler(getAllTodosHandler);
 
         // Create some todos
         await mediator.DispatchAsync(new CreateTodoCommand
@@ -273,7 +282,7 @@ public class Program
 
         await mediator.DispatchAsync(new CreateTodoCommand
         {
-            Title = "Build Todorior",
+            Title = "Build TodoApp",
             Description = "Create an awesome task management app"
         });
 
