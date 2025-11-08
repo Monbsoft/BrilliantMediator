@@ -97,6 +97,9 @@ public sealed class MediatorBuilder
         ICommandHandler<TCommand> handler)
         where TCommand : ICommand
     {
+        if (handler == null)
+            throw new ArgumentNullException(nameof(handler));
+
         // Store registration action for later execution
         _handlerRegistrations.Add((_, mediator) =>
         {
@@ -114,6 +117,9 @@ public sealed class MediatorBuilder
         ICommandHandler<TCommand, TResponse> handler)
         where TCommand : ICommand<TResponse>
     {
+        if (handler == null)
+            throw new ArgumentNullException(nameof(handler));
+
         // Store registration action for later execution
         _handlerRegistrations.Add((_, mediator) =>
         {
@@ -131,6 +137,9 @@ public sealed class MediatorBuilder
         IQueryHandler<TQuery, TResponse> handler)
         where TQuery : IQuery<TResponse>
     {
+        if (handler == null)
+            throw new ArgumentNullException(nameof(handler));
+
         // Store registration action for later execution
         _handlerRegistrations.Add((_, mediator) =>
         {

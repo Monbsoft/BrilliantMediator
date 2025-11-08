@@ -3,41 +3,41 @@ using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Monbsoft.BrilliantMediator.Abstractions.Handlers;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Monbsoft.BrilliantMediator.Exceptions;
+using System.Collections.Concurrent;
 
 namespace Monbsoft.BrilliantMediator.Core;
 
 /// <summary>
 /// Ultra-lightweight, zero-reflection mediator implementation.
 /// Uses compiled generics for maximum performance.
+/// Each instance maintains its own handler registry to avoid state sharing.
 /// </summary>
 public sealed class Mediator : IMediator
 {
     /// <summary>
-    /// Registry for command handlers without response.
-    /// Each TCommand gets its own static reference - zero reflection, O(1) lookup.
+    /// Instance-based registry for handlers.
+    /// Uses a concurrent dictionary to store handler instances by their type key.
+    /// This ensures isolation between different Mediator instances and test runs.
     /// </summary>
-    private sealed class CommandHandlerRegistry<TCommand> where TCommand : ICommand
-    {
-        public static ICommandHandler<TCommand>? Instance { get; set; }
-    }
+    private readonly ConcurrentDictionary<string, object?> _handlerRegistry = new();
 
     /// <summary>
-    /// Registry for command handlers with response.
-    /// Each TCommand gets its own static reference - zero reflection, O(1) lookup.
+    /// Generates a unique key for a command handler type.
     /// </summary>
-    private sealed class CommandHandlerRegistry<TCommand, TResponse> where TCommand : ICommand<TResponse>
-    {
-        public static ICommandHandler<TCommand, TResponse>? Instance { get; set; }
-    }
+    private static string GetCommandHandlerKey<TCommand>() where TCommand : ICommand
+        => $"cmd_{typeof(TCommand).FullName}";
 
     /// <summary>
-    /// Registry for query handlers.
-    /// Each TQuery gets its own static reference - zero reflection, O(1) lookup.
+    /// Generates a unique key for a command handler type with response.
     /// </summary>
-    private sealed class QueryHandlerRegistry<TQuery, TResponse> where TQuery : IQuery<TResponse>
-    {
-        public static IQueryHandler<TQuery, TResponse>? Instance { get; set; }
-    }
+    private static string GetCommandHandlerKey<TCommand, TResponse>() where TCommand : ICommand<TResponse>
+   => $"cmd_resp_{typeof(TCommand).FullName}_{typeof(TResponse).FullName}";
+
+    /// <summary>
+    /// Generates a unique key for a query handler type.
+    /// </summary>
+    private static string GetQueryHandlerKey<TQuery, TResponse>() where TQuery : IQuery<TResponse>
+    => $"query_{typeof(TQuery).FullName}_{typeof(TResponse).FullName}";
 
     /// <summary>
     /// Registers a handler for a command without response.
@@ -52,7 +52,8 @@ public sealed class Mediator : IMediator
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
-        CommandHandlerRegistry<TCommand>.Instance = handler;
+        var key = GetCommandHandlerKey<TCommand>();
+        _handlerRegistry[key] = handler;
     }
 
     /// <summary>
@@ -64,13 +65,14 @@ public sealed class Mediator : IMediator
     /// <param name="handler">The handler instance.</param>
     /// <exception cref="ArgumentNullException">Thrown if handler is null.</exception>
     public void RegisterCommandHandler<TCommand, TResponse>(
-        ICommandHandler<TCommand, TResponse> handler)
+      ICommandHandler<TCommand, TResponse> handler)
         where TCommand : ICommand<TResponse>
     {
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
-        CommandHandlerRegistry<TCommand, TResponse>.Instance = handler;
+        var key = GetCommandHandlerKey<TCommand, TResponse>();
+        _handlerRegistry[key] = handler;
     }
 
     /// <summary>
@@ -82,12 +84,13 @@ public sealed class Mediator : IMediator
     /// <param name="handler">The handler instance.</param>
     /// <exception cref="ArgumentNullException">Thrown if handler is null.</exception>
     public void RegisterQueryHandler<TQuery, TResponse>(IQueryHandler<TQuery, TResponse> handler)
-        where TQuery : IQuery<TResponse>
+      where TQuery : IQuery<TResponse>
     {
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
-        QueryHandlerRegistry<TQuery, TResponse>.Instance = handler;
+        var key = GetQueryHandlerKey<TQuery, TResponse>();
+        _handlerRegistry[key] = handler;
     }
 
     /// <summary>
@@ -100,10 +103,11 @@ public sealed class Mediator : IMediator
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
     public async Task DispatchAsync<TCommand>(TCommand command) where TCommand : ICommand
     {
-        var handler = CommandHandlerRegistry<TCommand>.Instance;
-        if (handler == null)
+        var key = GetCommandHandlerKey<TCommand>();
+        if (!_handlerRegistry.TryGetValue(key, out var handlerObj))
             throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
 
+        var handler = (ICommandHandler<TCommand>)handlerObj!;
         await handler.Handle(command).ConfigureAwait(false);
     }
 
@@ -119,16 +123,17 @@ public sealed class Mediator : IMediator
     public async Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command)
         where TCommand : ICommand<TResponse>
     {
-        var handler = CommandHandlerRegistry<TCommand, TResponse>.Instance;
-        if (handler == null)
+        var key = GetCommandHandlerKey<TCommand, TResponse>();
+        if (!_handlerRegistry.TryGetValue(key, out var handlerObj))
             throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
 
+        var handler = (ICommandHandler<TCommand, TResponse>)handlerObj!;
         return await handler.Handle(command).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Sends a query.
-
+    /// O(1), inlinable by JIT, near-zero overhead.
     /// </summary>
     /// <typeparam name="TQuery">The query type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
@@ -138,10 +143,11 @@ public sealed class Mediator : IMediator
     public async Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query)
         where TQuery : IQuery<TResponse>
     {
-        var handler = QueryHandlerRegistry<TQuery, TResponse>.Instance;
-        if (handler == null)
+        var key = GetQueryHandlerKey<TQuery, TResponse>();
+        if (!_handlerRegistry.TryGetValue(key, out var handlerObj))
             throw HandlerNotRegisteredException.ForQuery(typeof(TQuery).Name);
 
+        var handler = (IQueryHandler<TQuery, TResponse>)handlerObj!;
         return await handler.Handle(query).ConfigureAwait(false);
     }
 }
