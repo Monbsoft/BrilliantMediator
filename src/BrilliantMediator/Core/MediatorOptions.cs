@@ -1,13 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Monbsoft.BrilliantMediator.Core;
 
-namespace BrilliantMediator.Core;
+namespace Monbsoft.BrilliantMediator;
 
 /// <summary>
-/// Configuration options for RadiantMediator.
+/// Configuration options for BrilliantMediator.
 /// </summary>
 public sealed class MediatorOptions
 {
@@ -54,5 +50,3 @@ public sealed class MediatorOptions
             throw new ArgumentException("MaxCachedTypes must be greater than 0", nameof(MaxCachedTypes));
     }
 }
-
-

@@ -5,6 +5,25 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Monbsoft.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+	  <!-- Package info -->
+	  <PackageId>BrilliantMediator</PackageId>
+	  <Title>BrilliantMediator</Title>
+	  <Description>Ultra-lightweight, zero-reflection mediator for .NET with blazing performance</Description>
+	  <Version>1.0.0</Version>
+	  <Authors>Monbsoft</Authors>
+	  <PackageProjectUrl>https://github.com/Monbsoft/BrilliantMediator</PackageProjectUrl>
+	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
+	  <RepositoryUrl>https://github.com/Monbsoft/BrilliantMediator</RepositoryUrl>
+	  <RepositoryType>git</RepositoryType>
+	  <PackageTags>mediator;cqrs;command;query;performance</PackageTags>
+	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.10" />
+  </ItemGroup>
 
 </Project>

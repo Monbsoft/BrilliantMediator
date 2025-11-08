@@ -1,152 +1,325 @@
-﻿using BrilliantMediator.Abstractions.Commands;
-using BrilliantMediator.Abstractions.Handlers;
-using BrilliantMediator.Abstractions.Queries;
-using BrilliantMediator.Core.Exceptions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Monbsoft.BrilliantMediator.Abstractions;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
+using Monbsoft.BrilliantMediator.Abstractions.Events;
+using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Queries;
+using Monbsoft.BrilliantMediator.Exceptions;
+using System.Collections.Concurrent;
 
-namespace BrilliantMediator.Core;
+namespace Monbsoft.BrilliantMediator.Core;
 
 /// <summary>
-/// Ultra-lightweight, zero-reflection mediator implementation.
-/// Uses compiled generics for maximum performance.
+/// Ultra-lightweight mediator implementation with DI support.
+/// Uses IServiceProvider to resolve handlers on-demand, supporting proper scoping.
+/// Each instance maintains its own handler type registry to track registrations.
+/// Supports Commands, Queries, and Events with fire-and-forget event handling.
+/// Handlers are resolved per request, allowing for scoped dependencies like DbContext.
 /// </summary>
-public sealed class Mediator
+public sealed class Mediator : IMediator
 {
+    private readonly IServiceProvider _serviceProvider;
+
     /// <summary>
-    /// Registry for command handlers without response.
-    /// Each TCommand gets its own static reference - zero reflection, O(1) lookup.
+    /// Registry to track which handler interface types are registered.
+    /// Stores handler interface types by their message key for fast lookup.
+    /// Used for DI-based resolution.
     /// </summary>
-    private sealed class CommandHandlerRegistry<TCommand> where TCommand : ICommand
+    private readonly ConcurrentDictionary<string, Type> _handlerTypeRegistry = new();
+
+    /// <summary>
+    /// Registry for event handler interface types.
+    /// Multiple handler interface types can be registered for the same event type.
+    /// Used for DI-based resolution.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, List<Type>> _eventHandlerTypeRegistry = new();
+
+    /// <summary>
+    /// Initializes a new instance of the Mediator class with DI support.
+    /// Handlers are resolved from the service provider on each request.
+    /// Supports scoped dependencies like DbContext.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider for resolving handlers.</param>
+    /// <exception cref="ArgumentNullException">Thrown if serviceProvider is null.</exception>
+    public Mediator(IServiceProvider serviceProvider)
     {
-        public static ICommandHandler<TCommand> Instance { get; set; }
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
 
     /// <summary>
-    /// Registry for command handlers with response.
-    /// Each TCommand gets its own static reference - zero reflection, O(1) lookup.
+    /// Generates a unique key for a command handler type.
     /// </summary>
-    private sealed class CommandHandlerRegistry<TCommand, TResponse> where TCommand : ICommand<TResponse>
+    private static string GetCommandHandlerKey<TCommand>() where TCommand : ICommand
+      => $"cmd_{typeof(TCommand).FullName}";
+
+    /// <summary>
+    /// Generates a unique key for a command handler type with response.
+    /// </summary>
+    private static string GetCommandHandlerKey<TCommand, TResponse>() where TCommand : ICommand<TResponse>
+        => $"cmd_resp_{typeof(TCommand).FullName}_{typeof(TResponse).FullName}";
+
+    /// <summary>
+    /// Generates a unique key for a query handler type.
+    /// </summary>
+    private static string GetQueryHandlerKey<TQuery, TResponse>() where TQuery : IQuery<TResponse>
+        => $"query_{typeof(TQuery).FullName}_{typeof(TResponse).FullName}";
+
+    /// <summary>
+    /// Generates a unique key for an event handler type.
+    /// </summary>
+    private static string GetEventHandlerKey<TEvent>() where TEvent : IEvent
+    => $"event_{typeof(TEvent).FullName}";
+
+    /// <summary>
+    /// Registers a command handler type for DI resolution.
+    /// </summary>
+    /// <typeparam name="TCommand">The command type.</typeparam>
+    public void RegisterCommandHandler<TCommand>()
+        where TCommand : ICommand
     {
-        public static ICommandHandler<TCommand, TResponse> Instance { get; set; }
+        var key = GetCommandHandlerKey<TCommand>();
+        _handlerTypeRegistry[key] = typeof(ICommandHandler<TCommand>);
     }
 
     /// <summary>
-    /// Registry for query handlers.
-    /// Each TQuery gets its own static reference - zero reflection, O(1) lookup.
-    /// </summary>
-    private sealed class QueryHandlerRegistry<TQuery, TResponse> where TQuery : IQuery<TResponse>
-    {
-        public static IQueryHandler<TQuery, TResponse> Instance { get; set; }
-    }
-
-    /// <summary>
-    /// Registers a handler for a command without response.
-    /// O(1), no allocations, no reflection.
+    /// Registers a command handler instance (for manual registration or testing).
     /// </summary>
     /// <typeparam name="TCommand">The command type.</typeparam>
     /// <param name="handler">The handler instance.</param>
-    /// <exception cref="ArgumentNullException">Thrown if handler is null.</exception>
     public void RegisterCommandHandler<TCommand>(ICommandHandler<TCommand> handler)
-        where TCommand : ICommand
+where TCommand : ICommand
     {
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
-        CommandHandlerRegistry<TCommand>.Instance = handler;
+        var key = GetCommandHandlerKey<TCommand>();
+        _handlerTypeRegistry[key] = typeof(ICommandHandler<TCommand>);
     }
 
     /// <summary>
-    /// Registers a handler for a command with response.
-    /// O(1), no allocations, no reflection.
+    /// Registers a command handler type with response for DI resolution.
+    /// </summary>
+    /// <typeparam name="TCommand">The command type.</typeparam>
+    /// <typeparam name="TResponse">The response type.</typeparam>
+    public void RegisterCommandHandler<TCommand, TResponse>()
+     where TCommand : ICommand<TResponse>
+    {
+        var key = GetCommandHandlerKey<TCommand, TResponse>();
+        _handlerTypeRegistry[key] = typeof(ICommandHandler<TCommand, TResponse>);
+    }
+
+    /// <summary>
+    /// Registers a command handler instance with response (for manual registration or testing).
     /// </summary>
     /// <typeparam name="TCommand">The command type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="handler">The handler instance.</param>
-    /// <exception cref="ArgumentNullException">Thrown if handler is null.</exception>
-    public void RegisterCommandHandler<TCommand, TResponse>(
-        ICommandHandler<TCommand, TResponse> handler)
+    public void RegisterCommandHandler<TCommand, TResponse>(ICommandHandler<TCommand, TResponse> handler)
         where TCommand : ICommand<TResponse>
     {
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
-        CommandHandlerRegistry<TCommand, TResponse>.Instance = handler;
+        var key = GetCommandHandlerKey<TCommand, TResponse>();
+        _handlerTypeRegistry[key] = typeof(ICommandHandler<TCommand, TResponse>);
     }
 
     /// <summary>
-    /// Registers a handler for a query.
-    /// O(1), no allocations, no reflection.
+    /// Registers a query handler type for DI resolution.
+    /// </summary>
+    /// <typeparam name="TQuery">The query type.</typeparam>
+    /// <typeparam name="TResponse">The response type.</typeparam>
+    public void RegisterQueryHandler<TQuery, TResponse>()
+           where TQuery : IQuery<TResponse>
+    {
+        var key = GetQueryHandlerKey<TQuery, TResponse>();
+        _handlerTypeRegistry[key] = typeof(IQueryHandler<TQuery, TResponse>);
+    }
+
+    /// <summary>
+    /// Registers a query handler instance (for manual registration or testing).
     /// </summary>
     /// <typeparam name="TQuery">The query type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="handler">The handler instance.</param>
-    /// <exception cref="ArgumentNullException">Thrown if handler is null.</exception>
     public void RegisterQueryHandler<TQuery, TResponse>(IQueryHandler<TQuery, TResponse> handler)
         where TQuery : IQuery<TResponse>
     {
         if (handler == null)
             throw new ArgumentNullException(nameof(handler));
 
-        QueryHandlerRegistry<TQuery, TResponse>.Instance = handler;
+        var key = GetQueryHandlerKey<TQuery, TResponse>();
+        _handlerTypeRegistry[key] = typeof(IQueryHandler<TQuery, TResponse>);
+    }
+
+    /// <summary>
+    /// Registers an event handler type for DI resolution.
+    /// Multiple handlers can be registered for the same event.
+    /// </summary>
+    /// <typeparam name="TEvent">The event type.</typeparam>
+    public void RegisterEventHandler<TEvent>()
+        where TEvent : IEvent
+    {
+        var key = GetEventHandlerKey<TEvent>();
+        var handlerTypes = _eventHandlerTypeRegistry.GetOrAdd(key, _ => new List<Type>());
+
+        lock (handlerTypes)
+        {
+            var handlerType = typeof(IEventHandler<TEvent>);
+            if (!handlerTypes.Contains(handlerType))
+            {
+                handlerTypes.Add(handlerType);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers an event handler instance (for manual registration or testing).
+    /// Multiple handlers can be registered for the same event.
+    /// </summary>
+    /// <typeparam name="TEvent">The event type.</typeparam>
+    /// <param name="handler">The handler instance.</param>
+    public void RegisterEventHandler<TEvent>(IEventHandler<TEvent> handler)
+        where TEvent : IEvent
+    {
+        if (handler == null)
+            throw new ArgumentNullException(nameof(handler));
+
+        var key = GetEventHandlerKey<TEvent>();
+        var handlerTypes = _eventHandlerTypeRegistry.GetOrAdd(key, _ => new List<Type>());
+
+
+        lock (handlerTypes)
+        {
+            var handlerType = typeof(IEventHandler<TEvent>);
+            if (!handlerTypes.Contains(handlerType))
+            {
+                handlerTypes.Add(handlerType);
+            }
+        }
     }
 
     /// <summary>
     /// Sends a command without response.
-    /// O(1), inlinable by JIT, near-zero overhead.
+    /// Resolves handler from DI container.
+    /// Supports scoped dependencies.
     /// </summary>
     /// <typeparam name="TCommand">The command type.</typeparam>
     /// <param name="command">The command to send.</param>
     /// <returns>A task that completes when the command is handled.</returns>
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
-    public async Task Send<TCommand>(TCommand command) where TCommand : ICommand
+    public async Task DispatchAsync<TCommand>(TCommand command) where TCommand : ICommand
     {
-        var handler = CommandHandlerRegistry<TCommand>.Instance;
-        if (handler == null)
+        var key = GetCommandHandlerKey<TCommand>();
+
+        if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
 
-        await handler.Handle(command).ConfigureAwait(false);
+        using(var scope = _serviceProvider.CreateScope())
+        {
+            var scopedProvider = scope.ServiceProvider;
+            var handler = (ICommandHandler<TCommand>)scopedProvider.GetService(handlerType)!;
+            if (handler == null)
+                throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
+            await handler.Handle(command).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
     /// Sends a command with response.
-    /// O(1), inlinable by JIT, near-zero overhead.
+    /// Resolves handler from DI container.
+    /// Supports scoped dependencies.
     /// </summary>
     /// <typeparam name="TCommand">The command type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="command">The command to send.</param>
     /// <returns>A task that completes with the response when the command is handled.</returns>
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
-    public async Task<TResponse> Send<TCommand, TResponse>(TCommand command)
-        where TCommand : ICommand<TResponse>
+    public async Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command)
+  where TCommand : ICommand<TResponse>
     {
-        var handler = CommandHandlerRegistry<TCommand, TResponse>.Instance;
-        if (handler == null)
+        var key = GetCommandHandlerKey<TCommand, TResponse>();
+
+        if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
 
-        return await handler.Handle(command).ConfigureAwait(false);
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var scopedProvider = scope.ServiceProvider;
+
+            var handler = (ICommandHandler<TCommand, TResponse>)scopedProvider.GetService(handlerType)!;
+            if (handler == null)
+                throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
+
+            return await handler.Handle(command).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
     /// Sends a query.
-    /// O(1), inlinable by JIT, near-zero overhead.
+    /// Resolves handler from DI container.
+    /// Supports scoped dependencies.
     /// </summary>
     /// <typeparam name="TQuery">The query type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="query">The query to send.</param>
     /// <returns>A task that completes with the response when the query is handled.</returns>
     /// <exception cref="HandlerNotRegisteredException">Thrown if no handler is registered.</exception>
-    public async Task<TResponse> Send<TQuery, TResponse>(TQuery query)
+    public async Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query)
         where TQuery : IQuery<TResponse>
     {
-        var handler = QueryHandlerRegistry<TQuery, TResponse>.Instance;
-        if (handler == null)
+        var key = GetQueryHandlerKey<TQuery, TResponse>();
+
+        if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw HandlerNotRegisteredException.ForQuery(typeof(TQuery).Name);
 
-        return await handler.Handle(query).ConfigureAwait(false);
+        using(var scope = _serviceProvider.CreateScope())
+        {
+            var scopedProvider = scope.ServiceProvider;
+
+            var handler = (IQueryHandler<TQuery, TResponse>)scopedProvider.GetService(handlerType)!;
+            if (handler == null)
+                throw HandlerNotRegisteredException.ForQuery(typeof(TQuery).Name);
+            return await handler.Handle(query).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Publishes an event to all registered handlers.
+    /// Resolves handlers from DI container.
+    /// Handlers are executed in parallel.
+    /// Each handler gets a fresh instance from the service provider.
+    /// </summary>
+    /// <typeparam name="TEvent">The event type.</typeparam>
+    /// <param name="event">The event to publish.</param>
+    /// <returns>A task that completes when all handlers have completed.</returns>
+    public Task PublishAsync<TEvent>(TEvent @event) where TEvent : IEvent
+    {
+        var key = GetEventHandlerKey<TEvent>();
+
+        if (!_eventHandlerTypeRegistry.TryGetValue(key, out var handlerTypes) || handlerTypes.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var tasks = new List<Task>(handlerTypes.Count);
+
+        using(var scope = _serviceProvider.CreateScope())
+        {
+            var scopedProvider = scope.ServiceProvider;
+            lock (handlerTypes)
+            {
+                foreach (var handlerType in handlerTypes)
+                {
+                    var handler = (IEventHandler<TEvent>)scopedProvider.GetService(handlerType)!;
+                    if (handler != null)
+                    {
+                        tasks.Add(handler.Handle(@event));
+                    }
+                }
+            }
+        }
+
+        return tasks.Count > 0 ? Task.WhenAll(tasks) : Task.CompletedTask;
     }
 }
-

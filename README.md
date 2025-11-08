@@ -347,5 +347,5 @@ Created with ❤️ for developers who care about performance.
 ## Support
 
 - 📖 [Documentation](docs/)
-- 🐛 [Issue Tracker](https://github.com/yourusername/BrilliantMediator/issues)
-- 💬 [Discussions](https://github.com/yourusername/BrilliantMediator/discussions)
+- 🐛 [Issue Tracker](https://github.com/Monbsoft/BrilliantMediator/issues)
+- 💬 [Discussions](https://github.com/Monbsoft/BrilliantMediator/discussions)

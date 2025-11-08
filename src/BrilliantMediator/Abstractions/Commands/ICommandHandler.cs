@@ -1,11 +1,4 @@
-﻿using BrilliantMediator.Abstractions.Commands;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace BrilliantMediator.Abstractions.Handlers;
+﻿namespace Monbsoft.BrilliantMediator.Abstractions.Commands;
 
 /// <summary>
 /// Handler for a command that does not return a response.

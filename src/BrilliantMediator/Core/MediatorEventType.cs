@@ -1,4 +1,4 @@
-﻿namespace BrilliantMediator.Core;
+﻿namespace Monbsoft.BrilliantMediator.Core;
 
 /// <summary>
 /// Enumeration of diagnostic event types.
@@ -25,5 +25,3 @@ public enum MediatorEventType
     /// </summary>
     Error
 }
-
-
