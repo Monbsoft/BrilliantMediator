@@ -632,7 +632,6 @@ var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
    .Build();
 
    var serviceProvider = services.BuildServiceProvider();
-var mediator = serviceProvider.GetRequiredService<IMediator>();
 
         // Assert - Verify all handlers are properly registered by checking DI
         var commandHandler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
