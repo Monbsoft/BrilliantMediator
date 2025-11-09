@@ -604,7 +604,7 @@ public class MediatorBuilderHandlerRegistrationTests
             services
             .AddBrilliantMediator()
                 .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-               .Build();
+                .Build();
 
             var serviceProvider = services.BuildServiceProvider();
 
