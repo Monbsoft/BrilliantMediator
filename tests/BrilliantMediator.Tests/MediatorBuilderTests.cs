@@ -602,9 +602,9 @@ public class MediatorBuilderHandlerRegistrationTests
             // Arrange
             var services = new ServiceCollection();
             services
-            .AddBrilliantMediator()
+                .AddBrilliantMediator()
                 .AddCommandHandler<BuilderTestCommand, BuilderTestCommandHandler>()
-               .Build();
+                .Build();
 
             var serviceProvider = services.BuildServiceProvider();
 
