@@ -83,7 +83,7 @@ Aucun - Cette version est entièrement rétrocompatible avec la v1.0.0
 
 ---
 
-## [1.0.0] - 2025-11-06
+## [1.0.0] - 2024-11-06
 
 Version stable finale intégrant toutes les fonctionnalités du Mediator Pattern avec support complet du CQRS et des événements.
 
