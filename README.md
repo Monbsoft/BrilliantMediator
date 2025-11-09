@@ -1,7 +1,7 @@
 # BrilliantMediator
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![.NET](https://img.shields.io/badge/.NET-6%2B-blue)
+![.NET](https://img.shields.io/badge/.NET-9%2B-blue)
 ![NuGet](https://img.shields.io/badge/NuGet-BrilliantMediator-blue)
 
 **Ultra-lightweight, zero-reflection mediator for .NET with blazing performance.**

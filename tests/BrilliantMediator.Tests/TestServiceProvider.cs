@@ -9,10 +9,17 @@ namespace Monbsoft.BrilliantMediator.Tests;
 /// <summary>
 /// Simple service provider for testing purposes.
 /// Allows handlers to be registered and resolved during tests.
+/// Supports scoping for mediator operations.
 /// </summary>
-public class TestServiceProvider : IServiceProvider
+public class TestServiceProvider : IServiceProvider, IServiceScopeFactory
 {
     private readonly Dictionary<Type, object> _services = new();
+
+    public TestServiceProvider()
+    {
+        // Register self as IServiceScopeFactory
+        _services[typeof(IServiceScopeFactory)] = this;
+    }
 
     public void AddService<TInterface>(object instance)
     {
@@ -33,9 +40,9 @@ public class TestServiceProvider : IServiceProvider
     /// Automatically registers under the correct interface type.
     /// </summary>
     public void AddCommandHandler<TCommand, TResponse>(ICommandHandler<TCommand, TResponse> handler)
-  where TCommand : Abstractions.Commands.ICommand<TResponse>
+        where TCommand : Abstractions.Commands.ICommand<TResponse>
     {
-     _services[typeof(ICommandHandler<TCommand, TResponse>)] = handler;
+        _services[typeof(ICommandHandler<TCommand, TResponse>)] = handler;
     }
 
     /// <summary>
@@ -45,7 +52,7 @@ public class TestServiceProvider : IServiceProvider
     public void AddQueryHandler<TQuery, TResponse>(IQueryHandler<TQuery, TResponse> handler)
         where TQuery : Abstractions.Queries.IQuery<TResponse>
     {
-     _services[typeof(IQueryHandler<TQuery, TResponse>)] = handler;
+        _services[typeof(IQueryHandler<TQuery, TResponse>)] = handler;
     }
 
     /// <summary>
@@ -61,6 +68,32 @@ public class TestServiceProvider : IServiceProvider
     {
         return _services.TryGetValue(serviceType, out var service) ? service : null;
     }
+
+    /// <summary>
+    /// Creates a new scope. For testing purposes, returns the same service provider.
+    /// </summary>
+    public IServiceScope CreateScope()
+    {
+        return new TestServiceScope(this);
+    }
+
+    /// <summary>
+    /// Test implementation of IServiceScope.
+    /// </summary>
+    private class TestServiceScope : IServiceScope
+    {
+        public TestServiceScope(IServiceProvider serviceProvider)
+        {
+            ServiceProvider = serviceProvider;
+        }
+
+        public IServiceProvider ServiceProvider { get; }
+
+        public void Dispose()
+        {
+            // Nothing to dispose in test scope
+        }
+    }
 }
 
 /// <summary>
@@ -71,7 +104,7 @@ public static class TestMediatorFactory
     public static (Core.Mediator mediator, TestServiceProvider serviceProvider) Create()
     {
         var serviceProvider = new TestServiceProvider();
- var mediator = new Core.Mediator(serviceProvider);
+        var mediator = new Core.Mediator(serviceProvider);
         return (mediator, serviceProvider);
     }
 }

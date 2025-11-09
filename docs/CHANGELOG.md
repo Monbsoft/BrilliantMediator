@@ -23,7 +23,67 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [1.0.0] - 2025-11-06
+## [1.1.0] - 2025-01-15
+
+Version mineure ajoutant le support complet des événements (Events) au pattern Mediator, complétant ainsi l'implémentation CQRS+E.
+
+### Added
+- 🔥 **Support complet des Events** - Publication parallèle fire-and-forget
+  - ✨ Interface `IEvent` pour les événements de domaine
+  - 🎪 Interface `IEventHandler<TEvent>` pour les handlers d'événements
+  - 📡 Publication avec `PublishAsync<TEvent>()` et exécution parallèle des handlers
+  - 🔍 Support pour plusieurs handlers par événement
+  - 🎯 Enregistrement avec `RegisterEventHandler<TEvent>()`
+- 🎯 **Extension MediatorBuilder pour Events**
+  - ✨ `AddEventHandler<TEvent, THandler>()` pour enregistrement fluent
+  - 🔍 Découverte automatique des event handlers via `AddHandlersFromAssembly()`
+- 🏗️ **Architecture événementielle améliorée**
+  - 🧬 Registry dédié pour les event handlers avec support multi-handlers
+  - 🔒 Thread-safety renforcée pour l'enregistrement concurrent d'handlers
+  - 📦 Exécution parallèle des handlers avec `Task.WhenAll()`
+  - 🎪 Scoping DI approprié - chaque handler obtient son propre scope
+- 📖 **Documentation complète des Events**
+  - 📚 Guide d'utilisation des événements dans GUIDE.md et README.md
+  - 🎯 Exemples pratiques d'événements de domaine
+  - 🏗️ Patterns d'architecture événementielle
+
+### Changed
+- 🔧 **Architecture de registres optimisée pour Events**
+  - 📈 `ConcurrentDictionary<string, List<Type>>` pour supporter plusieurs handlers par événement
+  - 🔐 Synchronisation thread-safe lors de l'ajout de handlers multiples
+  - 🎯 Clés de lookup optimisées pour les événements
+- 📦 **Amélioration du scoping DI**
+  - ✨ Chaque handler d'événement obtient son propre scope pour isolation
+  - 🔒 Gestion appropriée des ressources scoped (DbContext, etc.)
+  - 📝 Support correct de `ConfigureAwait(false)` dans tous les scénarios
+- 📖 **Documentation enrichie**
+  - 🎯 Exemples d'utilisation des événements dans README et GUIDE
+  - 🏗️ Architecture CQRS+E complète documentée
+  - 📚 Patterns d'événements de domaine
+
+### Fixed
+- 🐛 **Gestion robuste des scopes DI pour Events**
+  - 🛡️ Résolution correcte des handlers avec dépendances scoped
+  - 🔒 Prévention des fuites de ressources lors de l'exécution parallèle
+  - ✅ Isolation des scopes entre handlers d'événements
+- 🧪 **Corrections dans les tests**
+  - ✅ `TestServiceProvider` implémente maintenant `IServiceScopeFactory`
+  - 🔧 Support du scoping dans tous les tests
+  - 📝 Tests de concurrence pour événements multiples
+
+### Performance
+- ⚡ **Optimisations pour la publication d'événements**
+  - 🚀 Exécution parallèle des handlers pour minimiser la latence
+  - 💾 Pré-allocation des listes de tâches pour réduire les allocations
+  - 🎯 Lookup O(1) pour les types d'événements
+  - 📊 Aucune allocation intermédiaire dans le chemin critique
+
+### Breaking Changes
+Aucun - Cette version est entièrement rétrocompatible avec la v1.0.0
+
+---
+
+## [1.0.0] - 2024-11-06
 
 Version stable finale intégrant toutes les fonctionnalités du Mediator Pattern avec support complet du CQRS et des événements.
 

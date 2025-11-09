@@ -215,7 +215,7 @@ where TCommand : ICommand
         if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name);
 
-        using(var scope = _serviceProvider.CreateScope())
+        using (var scope = _serviceProvider.CreateScope())
         {
             var scopedProvider = scope.ServiceProvider;
             var handler = (ICommandHandler<TCommand>)scopedProvider.GetService(handlerType)!;
@@ -273,7 +273,7 @@ where TCommand : ICommand
         if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw HandlerNotRegisteredException.ForQuery(typeof(TQuery).Name);
 
-        using(var scope = _serviceProvider.CreateScope())
+        using (var scope = _serviceProvider.CreateScope())
         {
             var scopedProvider = scope.ServiceProvider;
 
@@ -295,39 +295,40 @@ where TCommand : ICommand
     /// <returns>A task that completes when all handlers have completed.</returns>
     public Task PublishAsync<TEvent>(TEvent @event) where TEvent : IEvent
     {
-      var key = GetEventHandlerKey<TEvent>();
+        var key = GetEventHandlerKey<TEvent>();
 
-      if (!_eventHandlerTypeRegistry.TryGetValue(key, out var handlerTypes) || handlerTypes.Count == 0)
-  {
+        if (!_eventHandlerTypeRegistry.TryGetValue(key, out var handlerTypes) || handlerTypes.Count == 0)
+        {
             return Task.CompletedTask;
         }
 
         var tasks = new List<Task>(handlerTypes.Count);
 
         lock (handlerTypes)
- {
-foreach (var handlerType in handlerTypes)
-    {
+        {
+            foreach (var handlerType in handlerTypes)
+            {
                 // Create a task that creates its own scope
                 tasks.Add(ExecuteHandlerAsync(handlerType, @event));
             }
-     }
+        }
 
-    return tasks.Count > 0 ? Task.WhenAll(tasks) : Task.CompletedTask;
+        return tasks.Count > 0 ? Task.WhenAll(tasks) : Task.CompletedTask;
     }
 
     /// <summary>
     /// Executes a single event handler with its own scope.
-/// Ensures each handler gets fresh scoped dependencies like DbContext.
+    /// Ensures each handler gets fresh scoped dependencies like DbContext.
     /// </summary>
     private async Task ExecuteHandlerAsync<TEvent>(Type handlerType, TEvent @event) where TEvent : IEvent
     {
-  using (var scope = _serviceProvider.CreateScope())
+        using (var scope = _serviceProvider.CreateScope())
         {
-    var handler = (IEventHandler<TEvent>)scope.ServiceProvider.GetService(handlerType)!;
-         if (handler != null)
-     {
-           await handler.Handle(@event).ConfigureAwait(false);
-}
+            var handler = (IEventHandler<TEvent>)scope.ServiceProvider.GetService(handlerType)!;
+            if (handler != null)
+            {
+                await handler.Handle(@event).ConfigureAwait(false);
+            }
         }
     }
+}
