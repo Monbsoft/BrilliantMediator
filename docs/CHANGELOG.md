@@ -23,7 +23,7 @@ et ce projet adhère à [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [1.1.0] - 2025-01-15
+## [1.1.0] - 2025-11-09
 
 Version mineure ajoutant le support complet des événements (Events) au pattern Mediator, complétant ainsi l'implémentation CQRS+E.
 
