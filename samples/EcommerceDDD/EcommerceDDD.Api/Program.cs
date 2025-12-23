@@ -20,7 +20,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-   options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+   options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo
   {
      Title = "Ecommerce DDD API",
         Version = "v1",
