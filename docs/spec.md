@@ -113,7 +113,7 @@ services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembl
 
 - `PublishAsync` utilise un `lock` sur `List<Type>` lors de la copie des handlers — pourrait être remplacé par `ImmutableList<T>` pour éliminer le lock dans le chemin chaud.
 - Les handlers d'instances dans `RegisterCommandHandler(handler)` ne stockent que le type — l'instance n'est pas utilisée lors du dispatch DI (comportement potentiellement surprenant en tests).
-- `docs/CHANGELOG.md` section `[Unreleased]` liste des fonctionnalités non implémentées (diagnostics, middlewares, CancellationToken, i18n) — à nettoyer ou à créer des issues.
+- Des fonctionnalités listées comme "à venir" (diagnostics, middlewares, CancellationToken, i18n) ne sont pas implémentées — à créer en issues GitHub ou à abandonner explicitement.
 
 ---
 

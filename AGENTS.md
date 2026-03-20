@@ -52,10 +52,8 @@ samples/
 └── EcommerceDDD/
 
 docs/
-├── spec.md          Source de vérité architecture + ADR
-├── GUIDE.md
-├── EXAMPLES.md
-└── CHANGELOG.md
+├── spec.md            Source de vérité architecture + ADR
+└── NuGetReadme.md
 ```
 
 ---
@@ -113,7 +111,7 @@ Quand l'utilisateur demande une relecture de commit (ou de code), endosse ce rô
 - Scénarios de test manquants (nominal + exception + concurrence)
 - Dead code, TODO sans ticket
 - `lock` sur `handlerTypes` dans `PublishAsync` qui pourrait être remplacé par une collection immuable
-- Absence de mise à jour de `docs/CHANGELOG.md` après changement d'API
+- Absence de mise à jour de `docs/spec.md` après changement d'API
 
 **Format du rapport**
 
@@ -168,7 +166,7 @@ Attends la réponse avant de poser la suivante. Le silence n'est pas une validat
 5. IMPLÉMENTER    → Abstractions d'abord, puis Core, puis Extensions, puis SourceGenerator
 6. TESTER         → tests unitaires + tests de concurrence
 7. LIVRER         → résumé + dette technique éventuelle
-8. DOCUMENTER     → mise à jour docs/spec.md + docs/CHANGELOG.md
+8. DOCUMENTER     → mise à jour docs/spec.md
 9. COMMITTER      → commit final + push de la branche + Pull Request
 ```
 
@@ -200,7 +198,7 @@ Le silence n'est pas une validation.
 ## Démarrage de chaque session
 
 1. Lis `docs/spec.md` s'il existe — c'est la source de vérité sur l'état courant.
-2. Lis `docs/CHANGELOG.md` pour les dernières modifications d'API.
+2. Lis `docs/spec.md` — c'est la seule source de vérité (API, ADR, dette technique).
 3. Résume en 3 lignes : où on en est, ce qui était prévu.
 4. Demande : *"On continue avec ce qui était prévu, ou tu as une nouvelle priorité ?"*
 5. Attends la réponse. Aucune action sans confirmation.
@@ -223,7 +221,7 @@ git checkout -b feature/{numero}-{nom-court}
 ### À la fin d'une itération
 ```bash
 dotnet build && dotnet test          # validation complète
-# Mise à jour docs/spec.md + docs/CHANGELOG.md
+# Mise à jour docs/spec.md
 git push -u origin feature/{numero}-{nom-court}
 # Créer la Pull Request (voir template ci-dessous)
 ```
@@ -239,7 +237,7 @@ git push -u origin feature/{numero}-{nom-court}
 ### Ce qui a été fait
 - {Changement 1}
 - {Changement 2}
-- Mise à jour `docs/CHANGELOG.md`
+- Mise à jour `docs/spec.md`
 
 ### Impact API publique
 - [ ] Aucun changement breaking
@@ -255,5 +253,5 @@ dotnet test    # {nombre} tests passent
 - [ ] Tests passent (unitaires + concurrence)
 - [ ] Aucune réflexion dans le chemin critique
 - [ ] API publique stable ou bump SemVer documenté
-- [ ] docs/CHANGELOG.md à jour
+- [ ] docs/spec.md à jour
 ```
