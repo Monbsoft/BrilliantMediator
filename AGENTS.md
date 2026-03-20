@@ -16,7 +16,7 @@ Caractéristiques fondamentales :
 - **DI-first** — intégration native avec `Microsoft.Extensions.DependencyInjection`
 - **Source Generator** — enregistrement automatique des handlers via `BrilliantMediator.SourceGenerator`
 
-Stack : .NET 10 — C# — xUnit — NuGet (`Monbsoft.BrilliantMediator`)
+Stack : .NET 10 — C# — xUnit — NuGet (`BrilliantMediator`)
 
 Namespace racine : `Monbsoft.BrilliantMediator`
 
