@@ -342,7 +342,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 ## Changelog
 
-See [CHANGELOG.md](https://github.com/Monbsoft/BrilliantMediator/blob/main/docs/CHANGELOG.md) for a detailed list of changes in each version.
+See [GitHub Releases](https://github.com/Monbsoft/BrilliantMediator/releases) for a detailed list of changes in each version.
 
 ## Author
 
