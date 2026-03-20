@@ -1,7 +1,7 @@
 # BrilliantMediator — Spec & Architecture
 
 > Source de vérité du projet. Mise à jour à la fin de chaque itération.
-> Dernière mise à jour : 2026-03-20 — itération #1 (AGENTS.md)
+> Dernière mise à jour : 2026-03-20 — itération #3 (Source Generator)
 
 ---
 
@@ -15,7 +15,7 @@ sans la surcharge de performance ni la complexité des bibliothèques existantes
 
 ---
 
-## API publique — v1.2.0
+## API publique — v1.3.0
 
 ### IMediator
 
@@ -59,10 +59,28 @@ void RegisterEventHandler<TEvent>(IEventHandler<TEvent> handler);
 ### Configuration DI
 
 ```csharp
-services.AddBrilliantMediator(assembly);
-// ou
-services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembly));
+// Avec Source Generator (recommandé — zéro réflexion)
+services.AddBrilliantMediator(builder => builder.AddGeneratedHandlers());
+
+// Manuel (déprécié depuis v1.3.0)
+[Obsolete] services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembly));
 ```
+
+### Source Generator — BrilliantMediator.SourceGenerator v1.3.0
+
+Référencer dans le `.csproj` cible :
+```xml
+<PackageReference Include="BrilliantMediator.SourceGenerator"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+Déclarer les assemblies supplémentaires à scanner :
+```csharp
+[assembly: ScanHandlersFrom(typeof(CreateOrderCommandHandler))]
+```
+
+Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant `AddGeneratedHandlers(this MediatorBuilder)`.
 
 ---
 
@@ -75,6 +93,7 @@ services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembl
 | 1.0.0 | Version stable. Exemple EcommerceDDD | 2024-11-06 |
 | 1.1.0 | Scoping DI renforcé par handler d'événement | 2025-11-09 |
 | 1.2.0 | Migration .NET 10 | 2026-03-20 |
+| 1.3.0 | BrilliantMediator.SourceGenerator — enregistrement zéro réflexion à la compilation | 2026-03-20 |
 
 ---
 
@@ -83,7 +102,8 @@ services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembl
 | # | Sujet | Statut |
 |---|-------|--------|
 | 1 | AGENTS.md — cycle de développement itératif | Livré (PR #8) |
-| 2 | Réduction verbosité API (génériques) | En discussion |
+| 2 | Nettoyage docs — suppression CHANGELOG/EXAMPLES/GUIDE | Livré (PR #9) |
+| 3 | BrilliantMediator.SourceGenerator | Livré |
 
 ---
 
@@ -107,6 +127,12 @@ services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembl
 - **Décision :** Enregistrement explicite via `RegisterCommandHandler<T>()` ou via `MediatorBuilder.AddHandlersFromAssembly()` (scan assemblies au démarrage uniquement, pas à l'exécution).
 - **Conséquences :** Verbosité accrue vs. MediatR. Contrepartie : erreurs détectées au démarrage, pas à l'exécution.
 
+### ADR-004 — Source Generator pour l'enregistrement zéro réflexion
+
+- **Contexte :** `AddHandlersFromAssembly()` utilise la réflexion au démarrage (`GetTypes()`, `MakeGenericMethod`), ce qui contredit la promesse "zéro réflexion" de la bibliothèque.
+- **Décision :** Créer `BrilliantMediator.SourceGenerator` (Roslyn `IIncrementalGenerator`) qui scanne les handlers à la compilation et génère `AddGeneratedHandlers(this MediatorBuilder)`. Les méthodes `AddHandlersFromAssembly*` sont marquées `[Obsolete]` avec message de migration vers v2.0.0. Configuration des assemblies supplémentaires via `[assembly: ScanHandlersFrom(typeof(T))]`.
+- **Conséquences :** Zéro réflexion à l'exécution y compris au démarrage. Erreurs de configuration détectées à la compilation. `AddHandlersFromAssembly*` restent fonctionnelles jusqu'à v2.0.0 pour la compatibilité.
+
 ---
 
 ## Dette technique
@@ -119,16 +145,4 @@ services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembl
 
 ## Prochaine itération
 
-**#2 — Réduction verbosité API publique**
-
-Objectif : réduire les paramètres de type redondants dans les appels `DispatchAsync` et `SendAsync`.
-
-```csharp
-// Actuel — TResponse doit être répété
-var result = await mediator.DispatchAsync<CreateOrderCommand, OrderId>(command);
-
-// Cible envisagée — TResponse inféré depuis ICommand<TResponse>
-var result = await mediator.DispatchAsync(command);
-```
-
-> Statut : en discussion — clarification besoin/périmètre/contraintes en cours.
+Aucune planifiée. À définir lors de la prochaine session.
