@@ -64,24 +64,30 @@ public sealed class Mediator : IMediator, IHandlerRegistry
         where TCommand : ICommand
     {
         var key = $"cmd_{typeof(TCommand).FullName}";
-        var handler = ResolveHandler<ICommandHandler<TCommand>>(key, () => HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name));
-        await handler.Handle(command, cancellationToken).ConfigureAwait(false);
+        await ExecuteInScopeAsync<ICommandHandler<TCommand>>(key,
+            () => HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name),
+            (handler, ct) => handler.Handle(command, ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command, CancellationToken cancellationToken = default)
         where TCommand : ICommand<TResponse>
     {
         var key = $"cmd_resp_{typeof(TCommand).FullName}_{typeof(TResponse).FullName}";
-        var handler = ResolveHandler<ICommandHandler<TCommand, TResponse>>(key, () => HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name));
-        return await handler.Handle(command, cancellationToken).ConfigureAwait(false);
+        return await ExecuteInScopeAsync<ICommandHandler<TCommand, TResponse>, TResponse>(key,
+            () => HandlerNotRegisteredException.ForCommand(typeof(TCommand).Name),
+            (handler, ct) => handler.Handle(command, ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query, CancellationToken cancellationToken = default)
         where TQuery : IQuery<TResponse>
     {
         var key = $"query_{typeof(TQuery).FullName}_{typeof(TResponse).FullName}";
-        var handler = ResolveHandler<IQueryHandler<TQuery, TResponse>>(key, () => HandlerNotRegisteredException.ForQuery(typeof(TQuery).Name));
-        return await handler.Handle(query, cancellationToken).ConfigureAwait(false);
+        return await ExecuteInScopeAsync<IQueryHandler<TQuery, TResponse>, TResponse>(key,
+            () => HandlerNotRegisteredException.ForQuery(typeof(TQuery).Name),
+            (handler, ct) => handler.Handle(query, ct),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
@@ -104,15 +110,34 @@ public sealed class Mediator : IMediator, IHandlerRegistry
 
     #endregion
 
-    private THandler ResolveHandler<THandler>(string key, Func<HandlerNotRegisteredException> exceptionFactory)
-        where THandler : class
+    private async Task ExecuteInScopeAsync<THandler>(
+        string key,
+        Func<HandlerNotRegisteredException> exceptionFactory,
+        Func<THandler, CancellationToken, Task> execute,
+        CancellationToken cancellationToken) where THandler : class
     {
         if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw exceptionFactory();
 
         using var scope = _serviceProvider.CreateScope();
-        var handler = scope.ServiceProvider.GetService(handlerType) as THandler;
-        return handler ?? throw exceptionFactory();
+        var handler = scope.ServiceProvider.GetService(handlerType) as THandler
+            ?? throw exceptionFactory();
+        await execute(handler, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<TResult> ExecuteInScopeAsync<THandler, TResult>(
+        string key,
+        Func<HandlerNotRegisteredException> exceptionFactory,
+        Func<THandler, CancellationToken, Task<TResult>> execute,
+        CancellationToken cancellationToken) where THandler : class
+    {
+        if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
+            throw exceptionFactory();
+
+        using var scope = _serviceProvider.CreateScope();
+        var handler = scope.ServiceProvider.GetService(handlerType) as THandler
+            ?? throw exceptionFactory();
+        return await execute(handler, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ExecuteEventHandlerAsync<TEvent>(Type handlerType, TEvent @event, CancellationToken cancellationToken)

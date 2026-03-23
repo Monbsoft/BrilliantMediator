@@ -92,7 +92,7 @@ await mediator.DispatchAsync(command, cancellationToken);
 
 **Works everywhere:** Console app, Worker Service, ASP.NET Core, etc. (no coupling to IApplicationBuilder)
 
-### Source Generator — BrilliantMediator.SourceGenerator v1.3.0
+### Source Generator — BrilliantMediator.SourceGenerator v3.0.0
 
 Référencer dans le `.csproj` cible :
 ```xml
@@ -198,7 +198,7 @@ Aucune dette structurelle identifiée après v3.0.0.
 - `MediatorOptions`, `MediatorDiagnosticEvent`, `MediatorEventType` — diagnostics sans cas d'usage clair
 - Middlewares — ajouteraient de la complexité sans bénéfice clair pour la majorité
 - Instance registration methods — nécessitaient DI lookup, ajoutaient de la confusion
-- `AddHandlersFromAssembly*` — préfacer le Source Generator (Obsolete en v3.0.0, sera supprimé en v4.0.0)
+- `AddHandlersFromAssembly*` — remplacé par le Source Generator (supprimé en v3.0.0)
 
 ---
 
@@ -206,7 +206,6 @@ Aucune dette structurelle identifiée après v3.0.0.
 
 **Candidates:**
 - v3.1.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`
-- v4.0.0 — Remove `[Obsolete] AddHandlersFromAssembly*` methods
 - Diagnostics dashboard (opt-in, external service)
 
 À valider lors de la prochaine session.

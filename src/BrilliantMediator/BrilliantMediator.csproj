@@ -10,7 +10,7 @@
 	  <PackageId>BrilliantMediator</PackageId>
 	  <Title>BrilliantMediator</Title>
 	  <Description>Ultra-lightweight, zero-reflection mediator for .NET with blazing performance</Description>
-	  <Version>1.2.0</Version>
+	  <Version>3.0.0</Version>
 	  <Authors>Monbsoft</Authors>
 	  <PackageProjectUrl>https://github.com/Monbsoft/BrilliantMediator</PackageProjectUrl>
 	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
