@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Monbsoft.BrilliantMediator.Abstractions;
 using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Monbsoft.BrilliantMediator.Abstractions.Events;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
 
 namespace Monbsoft.BrilliantMediator.Tests;
@@ -17,7 +17,6 @@ public class TestServiceProvider : IServiceProvider, IServiceScopeFactory
 
     public TestServiceProvider()
     {
-        // Register self as IServiceScopeFactory
         _services[typeof(IServiceScopeFactory)] = this;
     }
 
@@ -26,39 +25,23 @@ public class TestServiceProvider : IServiceProvider, IServiceScopeFactory
         _services[typeof(TInterface)] = instance;
     }
 
-    /// <summary>
-    /// Adds a command handler to the service provider.
-    /// Automatically registers under the correct interface type.
-    /// </summary>
-    public void AddCommandHandler<TCommand>(ICommandHandler<TCommand> handler) where TCommand : Abstractions.Commands.ICommand
+    public void AddCommandHandler<TCommand>(ICommandHandler<TCommand> handler) where TCommand : ICommand
     {
         _services[typeof(ICommandHandler<TCommand>)] = handler;
     }
 
-    /// <summary>
-    /// Adds a command handler with response to the service provider.
-    /// Automatically registers under the correct interface type.
-    /// </summary>
     public void AddCommandHandler<TCommand, TResponse>(ICommandHandler<TCommand, TResponse> handler)
-        where TCommand : Abstractions.Commands.ICommand<TResponse>
+        where TCommand : ICommand<TResponse>
     {
         _services[typeof(ICommandHandler<TCommand, TResponse>)] = handler;
     }
 
-    /// <summary>
-    /// Adds a query handler to the service provider.
-    /// Automatically registers under the correct interface type.
-    /// </summary>
     public void AddQueryHandler<TQuery, TResponse>(IQueryHandler<TQuery, TResponse> handler)
-        where TQuery : Abstractions.Queries.IQuery<TResponse>
+        where TQuery : IQuery<TResponse>
     {
         _services[typeof(IQueryHandler<TQuery, TResponse>)] = handler;
     }
 
-    /// <summary>
-    /// Adds an event handler to the service provider.
-    /// Automatically registers under the correct interface type.
-    /// </summary>
     public void AddEventHandler<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
     {
         _services[typeof(IEventHandler<TEvent>)] = handler;
@@ -69,17 +52,11 @@ public class TestServiceProvider : IServiceProvider, IServiceScopeFactory
         return _services.TryGetValue(serviceType, out var service) ? service : null;
     }
 
-    /// <summary>
-    /// Creates a new scope. For testing purposes, returns the same service provider.
-    /// </summary>
     public IServiceScope CreateScope()
     {
         return new TestServiceScope(this);
     }
 
-    /// <summary>
-    /// Test implementation of IServiceScope.
-    /// </summary>
     private class TestServiceScope : IServiceScope
     {
         public TestServiceScope(IServiceProvider serviceProvider)
@@ -91,7 +68,6 @@ public class TestServiceProvider : IServiceProvider, IServiceScopeFactory
 
         public void Dispose()
         {
-            // Nothing to dispose in test scope
         }
     }
 }

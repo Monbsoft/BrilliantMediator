@@ -1,6 +1,6 @@
 using EcommerceDDD.Application.Orders.Dtos;
 using EcommerceDDD.Domain.Orders;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Queries;
 
 
 namespace EcommerceDDD.Application.Orders.Queries;
@@ -14,7 +14,7 @@ public class GetPendingOrdersQueryHandler : IQueryHandler<GetPendingOrdersQuery,
         _orderRepository = orderRepository;
     }
 
-  public async Task<List<OrderDto>> Handle(GetPendingOrdersQuery query)
+  public async Task<List<OrderDto>> Handle(GetPendingOrdersQuery query, CancellationToken cancellationToken = default)
     {
         var allOrders = await _orderRepository.GetAllAsync();
      var pendingOrders = allOrders.Where(o => o.Status == OrderStatus.Pending).ToList();

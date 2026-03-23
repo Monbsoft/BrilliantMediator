@@ -14,7 +14,7 @@ public class OrderPlacedEventHandler : IEventHandler<OrderPlacedEvent>
         _logger = logger;
     }
 
-    public async Task Handle(OrderPlacedEvent @event)
+    public async Task Handle(OrderPlacedEvent @event, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation($"📋 Commande placée: {@event.OrderId} pour l'utilisateur {@event.UserId} - Montant: {@event.TotalAmount}€");
         await Task.CompletedTask;
@@ -30,7 +30,7 @@ public class OrderConfirmedEventHandler : IEventHandler<OrderConfirmedEvent>
         _logger = logger;
     }
 
-    public async Task Handle(OrderConfirmedEvent @event)
+    public async Task Handle(OrderConfirmedEvent @event, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation($"✅ Commande confirmée: {@event.OrderId}");
         await Task.CompletedTask;
@@ -46,7 +46,7 @@ public class OrderShippedEventHandler : IEventHandler<OrderShippedEvent>
         _logger = logger;
     }
 
-    public async Task Handle(OrderShippedEvent @event)
+    public async Task Handle(OrderShippedEvent @event, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation($"📦 Commande expédiée: {@event.OrderId} - Tracking: {@event.TrackingNumber}");
         await Task.CompletedTask;
@@ -62,7 +62,7 @@ public class OrderDeliveredEventHandler : IEventHandler<OrderDeliveredEvent>
         _logger = logger;
     }
 
-    public async Task Handle(OrderDeliveredEvent @event)
+    public async Task Handle(OrderDeliveredEvent @event, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation($"🎉 Commande livrée: {@event.OrderId}");
         await Task.CompletedTask;
@@ -78,7 +78,7 @@ public class OrderCancelledEventHandler : IEventHandler<OrderCancelledEvent>
         _logger = logger;
     }
 
-    public async Task Handle(OrderCancelledEvent @event)
+    public async Task Handle(OrderCancelledEvent @event, CancellationToken cancellationToken = default)
     {
         _logger.LogWarning($"❌ Commande annulée: {@event.OrderId}");
         await Task.CompletedTask;

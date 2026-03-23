@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Monbsoft.BrilliantMediator.Abstractions;
 using Monbsoft.BrilliantMediator.Abstractions.Commands;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
 using Monbsoft.BrilliantMediator.Extensions;
 using Radiant.ConsoleApp.Application.Commands;
 using Radiant.ConsoleApp.Application.DTOs;
@@ -30,9 +29,8 @@ services
     .Build();
 
 var provider = services.BuildServiceProvider();
+provider.UseBrilliantMediator();
 var mediator = provider.GetRequiredService<IMediator>();
-var initializer = provider.GetRequiredService<IMediatorInitializer>();
-initializer.Initialize(mediator);
 
 var todoService = provider.GetService<TodoService>();
 

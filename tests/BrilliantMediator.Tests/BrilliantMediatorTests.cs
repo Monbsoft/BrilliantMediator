@@ -1,5 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Commands;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Monbsoft.BrilliantMediator.Core;
 using Monbsoft.BrilliantMediator.Exceptions;
@@ -58,7 +57,7 @@ public class TestCommandHandler : ICommandHandler<TestCommand>
     public bool Executed { get; set; }
     public string? ReceivedData { get; set; }
 
-    public Task Handle(TestCommand command)
+    public Task Handle(TestCommand command, CancellationToken cancellationToken = default)
     {
         Executed = true;
         ReceivedData = command.Data;
@@ -68,7 +67,7 @@ public class TestCommandHandler : ICommandHandler<TestCommand>
 
 public class ThrowingCommandHandler : ICommandHandler<TestCommand>
 {
-    public Task Handle(TestCommand command)
+    public Task Handle(TestCommand command, CancellationToken cancellationToken = default)
     {
         throw new InvalidOperationException("Test exception from command handler");
     }
@@ -76,9 +75,9 @@ public class ThrowingCommandHandler : ICommandHandler<TestCommand>
 
 public class TestCommandWithResponseHandler : ICommandHandler<TestCommandWithResponse, TestResult>
 {
-    public async Task<TestResult> Handle(TestCommandWithResponse command)
+    public async Task<TestResult> Handle(TestCommandWithResponse command, CancellationToken cancellationToken = default)
     {
-        await Task.Delay(1); // Simulate async work
+        await Task.Delay(1, cancellationToken);
         return new TestResult
         {
             Executed = true,
@@ -88,10 +87,9 @@ public class TestCommandWithResponseHandler : ICommandHandler<TestCommandWithRes
     }
 }
 
-// High-performance handler for performance testing (no artificial delays)
 public class OptimizedCommandWithResponseHandler : ICommandHandler<TestCommandWithResponse, TestResult>
 {
-    public Task<TestResult> Handle(TestCommandWithResponse command)
+    public Task<TestResult> Handle(TestCommandWithResponse command, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new TestResult
         {
@@ -104,7 +102,7 @@ public class OptimizedCommandWithResponseHandler : ICommandHandler<TestCommandWi
 
 public class ThrowingCommandWithResponseHandler : ICommandHandler<TestCommandWithResponse, TestResult>
 {
-    public Task<TestResult> Handle(TestCommandWithResponse command)
+    public Task<TestResult> Handle(TestCommandWithResponse command, CancellationToken cancellationToken = default)
     {
         throw new InvalidOperationException("Test exception from command with response handler");
     }
@@ -112,17 +110,16 @@ public class ThrowingCommandWithResponseHandler : ICommandHandler<TestCommandWit
 
 public class TestQueryHandler : IQueryHandler<TestQuery, QueryResult>
 {
-    public async Task<QueryResult> Handle(TestQuery query)
+    public async Task<QueryResult> Handle(TestQuery query, CancellationToken cancellationToken = default)
     {
-        await Task.Delay(1); // Simulate async work
+        await Task.Delay(1, cancellationToken);
         return new QueryResult { Id = query.Id, Data = $"Query result for {query.Id}" };
     }
 }
 
-// High-performance handler for performance testing (no artificial delays)
 public class OptimizedQueryHandler : IQueryHandler<TestQuery, QueryResult>
 {
-    public Task<QueryResult> Handle(TestQuery query)
+    public Task<QueryResult> Handle(TestQuery query, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new QueryResult { Id = query.Id, Data = $"Query result for {query.Id}" });
     }
@@ -130,7 +127,7 @@ public class OptimizedQueryHandler : IQueryHandler<TestQuery, QueryResult>
 
 public class ThrowingQueryHandler : IQueryHandler<TestQuery, QueryResult>
 {
-    public Task<QueryResult> Handle(TestQuery query)
+    public Task<QueryResult> Handle(TestQuery query, CancellationToken cancellationToken = default)
     {
         throw new InvalidOperationException("Test exception from query handler");
     }
@@ -145,17 +142,14 @@ public class MediatorCoreTests
     [Fact]
     public async Task DispatchAsync_CommandWithoutResponse_ExecutesHandler()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler = new TestCommandHandler();
         serviceProvider.AddCommandHandler(handler);
-        mediator.RegisterCommandHandler(handler);
+        mediator.RegisterCommandHandler<TestCommand>();
         var command = new TestCommand { Data = "test data" };
 
-        // Act
         await mediator.DispatchAsync(command);
 
-        // Assert
         Assert.True(handler.Executed);
         Assert.Equal("test data", handler.ReceivedData);
     }
@@ -163,17 +157,14 @@ public class MediatorCoreTests
     [Fact]
     public async Task DispatchAsync_CommandWithResponse_ReturnsCorrectResult()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler = new TestCommandWithResponseHandler();
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(handler);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(handler);
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
         var command = new TestCommandWithResponse { Value = 5 };
 
-        // Act
         var result = await mediator.DispatchAsync<TestCommandWithResponse, TestResult>(command);
 
-        // Assert
         Assert.NotNull(result);
         Assert.True(result.Executed);
         Assert.Equal(10, result.Value);
@@ -183,17 +174,14 @@ public class MediatorCoreTests
     [Fact]
     public async Task SendAsync_Query_ReturnsCorrectResult()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler = new TestQueryHandler();
         serviceProvider.AddQueryHandler<TestQuery, QueryResult>(handler);
-        mediator.RegisterQueryHandler(handler);
+        mediator.RegisterQueryHandler<TestQuery, QueryResult>();
         var query = new TestQuery { Id = 42 };
 
-        // Act
         var result = await mediator.SendAsync<TestQuery, QueryResult>(query);
 
-        // Assert
         Assert.NotNull(result);
         Assert.Equal(42, result.Id);
         Assert.Equal("Query result for 42", result.Data);
@@ -202,11 +190,9 @@ public class MediatorCoreTests
     [Fact]
     public async Task DispatchAsync_UnregisteredCommand_ThrowsHandlerNotRegisteredException()
     {
-        // Arrange
         var (mediator, _) = TestMediatorFactory.Create();
         var command = new TestUnregisteredCommand();
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<HandlerNotRegisteredException>(
             () => mediator.DispatchAsync(command));
 
@@ -217,11 +203,9 @@ public class MediatorCoreTests
     [Fact]
     public async Task DispatchAsync_UnregisteredCommandWithResponse_ThrowsHandlerNotRegisteredException()
     {
-        // Arrange
         var (mediator, _) = TestMediatorFactory.Create();
         var command = new TestUnregisteredCommandWithResponse { Value = 5 };
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<HandlerNotRegisteredException>(
             () => mediator.DispatchAsync<TestUnregisteredCommandWithResponse, TestResult>(command));
 
@@ -232,11 +216,9 @@ public class MediatorCoreTests
     [Fact]
     public async Task SendAsync_UnregisteredQuery_ThrowsHandlerNotRegisteredException()
     {
-        // Arrange
         var (mediator, _) = TestMediatorFactory.Create();
         var query = new TestUnregisteredQuery { Id = 1 };
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<HandlerNotRegisteredException>(
             () => mediator.SendAsync<TestUnregisteredQuery, QueryResult>(query));
 
@@ -252,70 +234,26 @@ public class MediatorCoreTests
 public class HandlerRegistrationTests
 {
     [Fact]
-    public void RegisterCommandHandler_WithNullHandler_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var (mediator, _) = TestMediatorFactory.Create();
-
-        // Act & Assert
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => mediator.RegisterCommandHandler<TestCommand>(null!));
-
-        Assert.Equal("handler", exception.ParamName);
-    }
-
-    [Fact]
-    public void RegisterCommandHandler_WithResponseAndNullHandler_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var (mediator, _) = TestMediatorFactory.Create();
-
-        // Act & Assert
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(null!));
-
-        Assert.Equal("handler", exception.ParamName);
-    }
-
-    [Fact]
-    public void RegisterQueryHandler_WithNullHandler_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var (mediator, _) = TestMediatorFactory.Create();
-
-        // Act & Assert
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => mediator.RegisterQueryHandler<TestQuery, QueryResult>(null!));
-
-        Assert.Equal("handler", exception.ParamName);
-    }
-
-    [Fact]
     public async Task RegisterCommandHandler_ReplacesPreviousHandler()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler1 = new TestCommandWithResponseHandler();
         var handler2 = new TestCommandWithResponseHandler();
 
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(handler1);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(handler1);
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(handler2);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(handler2);
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
 
         var command = new TestCommandWithResponse { Value = 10 };
-
-        // Act
         var result = await mediator.DispatchAsync<TestCommandWithResponse, TestResult>(command);
 
-        // Assert - The second handler should be used
         Assert.Equal(20, result.Value);
     }
 
     [Fact]
     public async Task RegisterMultipleHandlers_AllTypesWork()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var commandHandler = new TestCommandHandler();
         var commandWithResponseHandler = new TestCommandWithResponseHandler();
@@ -325,23 +263,19 @@ public class HandlerRegistrationTests
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(commandWithResponseHandler);
         serviceProvider.AddQueryHandler<TestQuery, QueryResult>(queryHandler);
 
-        mediator.RegisterCommandHandler(commandHandler);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(commandWithResponseHandler);
-        mediator.RegisterQueryHandler<TestQuery, QueryResult>(queryHandler);
+        mediator.RegisterCommandHandler<TestCommand>();
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
+        mediator.RegisterQueryHandler<TestQuery, QueryResult>();
 
-        // Act & Assert - Test each type individually
-        // Command without response
         await mediator.DispatchAsync(new TestCommand { Data = "test" });
         Assert.True(commandHandler.Executed);
         Assert.Equal("test", commandHandler.ReceivedData);
 
-        // Command with response
         var commandResult = await mediator.DispatchAsync<TestCommandWithResponse, TestResult>(
             new TestCommandWithResponse { Value = 3 });
         Assert.True(commandResult.Executed);
         Assert.Equal(6, commandResult.Value);
 
-        // Query
         var queryResult = await mediator.SendAsync<TestQuery, QueryResult>(
             new TestQuery { Id = 123 });
         Assert.Equal(123, queryResult.Id);
@@ -358,13 +292,11 @@ public class ErrorHandlingTests
     [Fact]
     public async Task DispatchAsync_HandlerThrowsException_PropagatesException()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler = new ThrowingCommandHandler();
         serviceProvider.AddCommandHandler(handler);
-        mediator.RegisterCommandHandler<TestCommand>(handler);
+        mediator.RegisterCommandHandler<TestCommand>();
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => mediator.DispatchAsync(new TestCommand()));
 
@@ -374,13 +306,11 @@ public class ErrorHandlingTests
     [Fact]
     public async Task DispatchAsync_CommandWithResponseHandlerThrowsException_PropagatesException()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler = new ThrowingCommandWithResponseHandler();
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(handler);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(handler);
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => mediator.DispatchAsync<TestCommandWithResponse, TestResult>(
                 new TestCommandWithResponse { Value = 5 }));
@@ -391,13 +321,11 @@ public class ErrorHandlingTests
     [Fact]
     public async Task SendAsync_QueryHandlerThrowsException_PropagatesException()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var handler = new ThrowingQueryHandler();
         serviceProvider.AddQueryHandler<TestQuery, QueryResult>(handler);
-        mediator.RegisterQueryHandler<TestQuery, QueryResult>(handler);
+        mediator.RegisterQueryHandler<TestQuery, QueryResult>();
 
-        // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => mediator.SendAsync<TestQuery, QueryResult>(new TestQuery { Id = 1 }));
 
@@ -414,16 +342,14 @@ public class ConcurrencyTests
     [Fact]
     public async Task DispatchAsync_MultipleConcurrentRequests_AllExecuteCorrectly()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
-        var handler = new OptimizedCommandWithResponseHandler(); // Use optimized handler for better concurrency testing
+        var handler = new OptimizedCommandWithResponseHandler();
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(handler);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(handler);
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
 
         var tasks = new List<Task<TestResult>>();
-        const int concurrentRequests = 1000; // Increased from 100
+        const int concurrentRequests = 1000;
 
-        // Act
         for (int i = 0; i < concurrentRequests; i++)
         {
             var command = new TestCommandWithResponse { Value = i };
@@ -432,7 +358,6 @@ public class ConcurrencyTests
 
         var results = await Task.WhenAll(tasks);
 
-        // Assert
         Assert.Equal(concurrentRequests, results.Length);
         for (int i = 0; i < concurrentRequests; i++)
         {
@@ -444,16 +369,14 @@ public class ConcurrencyTests
     [Fact]
     public async Task SendAsync_MultipleConcurrentQueries_AllExecuteCorrectly()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
-        var handler = new OptimizedQueryHandler(); // Use optimized handler for better concurrency testing
+        var handler = new OptimizedQueryHandler();
         serviceProvider.AddQueryHandler<TestQuery, QueryResult>(handler);
-        mediator.RegisterQueryHandler<TestQuery, QueryResult>(handler);
+        mediator.RegisterQueryHandler<TestQuery, QueryResult>();
 
         var tasks = new List<Task<QueryResult>>();
-        const int concurrentRequests = 1000; // Increased from 50
+        const int concurrentRequests = 1000;
 
-        // Act
         for (int i = 0; i < concurrentRequests; i++)
         {
             var query = new TestQuery { Id = i };
@@ -462,7 +385,6 @@ public class ConcurrencyTests
 
         var results = await Task.WhenAll(tasks);
 
-        // Assert
         Assert.Equal(concurrentRequests, results.Length);
         for (int i = 0; i < concurrentRequests; i++)
         {
@@ -474,7 +396,6 @@ public class ConcurrencyTests
     [Fact]
     public async Task MixedConcurrentOperations_AllTypesExecuteCorrectly()
     {
-        // Arrange
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var commandHandler = new TestCommandHandler();
         var commandWithResponseHandler = new OptimizedCommandWithResponseHandler();
@@ -484,21 +405,18 @@ public class ConcurrencyTests
         serviceProvider.AddCommandHandler<TestCommandWithResponse, TestResult>(commandWithResponseHandler);
         serviceProvider.AddQueryHandler<TestQuery, QueryResult>(queryHandler);
 
-        mediator.RegisterCommandHandler(commandHandler);
-        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>(commandWithResponseHandler);
-        mediator.RegisterQueryHandler<TestQuery, QueryResult>(queryHandler);
+        mediator.RegisterCommandHandler<TestCommand>();
+        mediator.RegisterCommandHandler<TestCommandWithResponse, TestResult>();
+        mediator.RegisterQueryHandler<TestQuery, QueryResult>();
 
         const int operationsPerType = 100;
         var allTasks = new List<Task>();
 
-        // Act - Execute different types of operations concurrently
-        // Commands without response
         for (int i = 0; i < operationsPerType; i++)
         {
             allTasks.Add(mediator.DispatchAsync(new TestCommand { Data = $"cmd-{i}" }));
         }
 
-        // Commands with response
         var commandTasks = new List<Task<TestResult>>();
         for (int i = 0; i < operationsPerType; i++)
         {
@@ -508,7 +426,6 @@ public class ConcurrencyTests
             allTasks.Add(task);
         }
 
-        // Queries
         var queryTasks = new List<Task<QueryResult>>();
         for (int i = 0; i < operationsPerType; i++)
         {
@@ -517,10 +434,8 @@ public class ConcurrencyTests
             allTasks.Add(task);
         }
 
-        // Wait for all operations to complete
         await Task.WhenAll(allTasks);
 
-        // Assert
         Assert.True(commandHandler.Executed);
 
         var commandResults = await Task.WhenAll(commandTasks);

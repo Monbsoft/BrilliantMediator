@@ -1,6 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Queries;
-
-namespace Monbsoft.BrilliantMediator.Abstractions.Handlers;
+namespace Monbsoft.BrilliantMediator.Abstractions.Queries;
 
 /// <summary>
 /// Handler for a query.
@@ -13,6 +11,7 @@ public interface IQueryHandler<in TQuery, TResponse> where TQuery : IQuery<TResp
     /// Handles the query asynchronously and returns a response.
     /// </summary>
     /// <param name="query">The query to handle.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes with the response when the query is handled.</returns>
-    Task<TResponse> Handle(TQuery query);
+    Task<TResponse> Handle(TQuery query, CancellationToken cancellationToken = default);
 }

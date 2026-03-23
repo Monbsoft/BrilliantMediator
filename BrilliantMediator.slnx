@@ -10,8 +10,10 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/BrilliantMediator/BrilliantMediator.csproj" Id="d9a9f583-e311-4a9c-b43b-8608d5291f8a" />
+    <Project Path="src/BrilliantMediator.SourceGenerator/BrilliantMediator.SourceGenerator.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BrilliantMediator.Tests/BrilliantMediator.Tests.csproj" Id="44c29274-ee82-43d2-91fd-fe36396053af" />
+    <Project Path="tests/BrilliantMediator.SourceGenerator.Tests/BrilliantMediator.SourceGenerator.Tests.csproj" />
   </Folder>
 </Solution>

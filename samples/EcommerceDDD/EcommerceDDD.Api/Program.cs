@@ -1,6 +1,5 @@
 using EcommerceDDD.Infrastructure.DependencyInjection;
-using Monbsoft.BrilliantMediator.Abstractions;
-using Monbsoft.BrilliantMediator.Core;
+using EcommerceDDD.Web.Infrastructure.Generated;
 using Monbsoft.BrilliantMediator.Extensions;
 using Serilog;
 
@@ -28,8 +27,13 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Ajouter les services e-commerce
+// Infrastructure : repositories et domain services
 builder.Services.AddEcommerceDDD();
+
+// BrilliantMediator avec handlers générés à la compilation (zéro réflexion)
+builder.Services.AddBrilliantMediator()
+    .AddGeneratedHandlers()
+    .Build();
 
 var app = builder.Build();
 
@@ -43,7 +47,7 @@ if (app.Environment.IsDevelopment())
   });
 }
 
-app.UseBrilliantMediator();
+app.Services.UseBrilliantMediator();
 
 app.UseHttpsRedirection();
 app.UseAuthorization();

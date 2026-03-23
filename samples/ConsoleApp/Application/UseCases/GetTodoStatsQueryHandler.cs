@@ -1,4 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+﻿using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Radiant.ConsoleApp.Application.Domain;
 using Radiant.ConsoleApp.Application.Interfaces;
 using Radiant.ConsoleApp.Application.Queries;
@@ -14,7 +14,7 @@ public class GetTodoStatsQueryHandler : IQueryHandler<GetTodoStatsQuery, TodoSta
         _repository = repository;
     }
 
-    public async Task<TodoStats> Handle(GetTodoStatsQuery query)
+    public async Task<TodoStats> Handle(GetTodoStatsQuery query, CancellationToken cancellationToken = default)
     {
         var todos = await _repository.GetAllAsync();
         var total = todos.Count;

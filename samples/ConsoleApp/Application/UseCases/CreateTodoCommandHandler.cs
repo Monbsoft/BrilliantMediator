@@ -14,7 +14,7 @@ public class CreateTodoCommandHandler : ICommandHandler<CreateTodoCommand, Creat
         _repository = repository;
     }
 
-    public async Task<CreateTodoResult> Handle(CreateTodoCommand command)
+    public async Task<CreateTodoResult> Handle(CreateTodoCommand command, CancellationToken cancellationToken = default)
     {
         var todo = new Todo
         {
