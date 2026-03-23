@@ -13,7 +13,7 @@ public class DeleteTodoCommandHandler : ICommandHandler<DeleteTodoCommand>
         _repository = repository;
     }
 
-    public async Task Handle(DeleteTodoCommand command)
+    public async Task Handle(DeleteTodoCommand command, CancellationToken cancellationToken = default)
     {
         await _repository.DeleteAsync(command.TodoId);
     }

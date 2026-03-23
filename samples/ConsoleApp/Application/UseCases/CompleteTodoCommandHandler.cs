@@ -14,7 +14,7 @@ public class CompleteTodoCommandHandler : ICommandHandler<CompleteTodoCommand, C
         _repository = repository;
     }
 
-    public async Task<CompleteTodoResult> Handle(CompleteTodoCommand command)
+    public async Task<CompleteTodoResult> Handle(CompleteTodoCommand command, CancellationToken cancellationToken = default)
     {
         var todo = await _repository.GetByIdAsync(command.TodoId);
         if (todo == null)

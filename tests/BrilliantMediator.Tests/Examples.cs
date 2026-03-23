@@ -1,5 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Commands;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Monbsoft.BrilliantMediator.Core;
 
@@ -10,8 +9,8 @@ namespace Monbsoft.BrilliantMediator.Tests;
 /// </summary>
 public class CreateTodoCommand : ICommand
 {
-    public string Title { get; set; }
-    public string Description { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -26,7 +25,7 @@ public class CreateTodoCommandHandler : ICommandHandler<CreateTodoCommand>
         _repository = repository;
     }
 
-    public async Task Handle(CreateTodoCommand command)
+    public async Task Handle(CreateTodoCommand command, CancellationToken cancellationToken = default)
     {
         var todo = new Todo
         {
@@ -59,7 +58,7 @@ public class CompleteTodoCommand : ICommand<CompleteTodoResult>
 public class CompleteTodoResult
 {
     public bool Success { get; set; }
-    public string Message { get; set; }
+    public string Message { get; set; } = string.Empty;
     public int CompletedCount { get; set; }
 }
 
@@ -75,7 +74,7 @@ public class CompleteTodoCommandHandler : ICommandHandler<CompleteTodoCommand, C
         _repository = repository;
     }
 
-    public async Task<CompleteTodoResult> Handle(CompleteTodoCommand command)
+    public async Task<CompleteTodoResult> Handle(CompleteTodoCommand command, CancellationToken cancellationToken = default)
     {
         var todo = await _repository.GetByIdAsync(command.TodoId);
         if (todo == null)
@@ -118,7 +117,7 @@ public class GetAllTodosQuery : IQuery<GetAllTodosResult>
 /// </summary>
 public class GetAllTodosResult
 {
-    public List<TodoDto> Todos { get; set; }
+    public List<TodoDto> Todos { get; set; } = new();
     public int TotalCount { get; set; }
     public int CompletedCount { get; set; }
 }
@@ -135,7 +134,7 @@ public class GetAllTodosQueryHandler : IQueryHandler<GetAllTodosQuery, GetAllTod
         _repository = repository;
     }
 
-    public async Task<GetAllTodosResult> Handle(GetAllTodosQuery query)
+    public async Task<GetAllTodosResult> Handle(GetAllTodosQuery query, CancellationToken cancellationToken = default)
     {
         var todos = await _repository.GetAllAsync();
 
@@ -177,8 +176,8 @@ public enum TodoStatus
 public class Todo
 {
     public Guid Id { get; set; }
-    public string Title { get; set; }
-    public string Description { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
     public TodoStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
@@ -187,27 +186,19 @@ public class Todo
 public class TodoDto
 {
     public Guid Id { get; set; }
-    public string Title { get; set; }
-    public string Description { get; set; }
-    public string Status { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
 }
 
-/// <summary>
-/// Simple in-memory repository for demonstration.
-/// In a real application, this would interact with a database.
-/// </summary>
 public interface ITodoRepository
 {
     Task AddAsync(Todo todo);
-
     Task UpdateAsync(Todo todo);
-
-    Task<Todo> GetByIdAsync(Guid id);
-
+    Task<Todo?> GetByIdAsync(Guid id);
     Task<List<Todo>> GetAllAsync();
-
     Task<int> CountCompletedAsync();
 }
 
@@ -229,7 +220,7 @@ public class InMemoryTodoRepository : ITodoRepository
         return Task.CompletedTask;
     }
 
-    public Task<Todo> GetByIdAsync(Guid id)
+    public Task<Todo?> GetByIdAsync(Guid id)
     {
         var todo = _todos.Find(t => t.Id == id);
         return Task.FromResult(todo);
@@ -258,22 +249,18 @@ public class Program
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var repository = new InMemoryTodoRepository();
 
-        // Create handlers
         var createTodoHandler = new CreateTodoCommandHandler(repository);
         var completeTodoHandler = new CompleteTodoCommandHandler(repository);
         var getAllTodosHandler = new GetAllTodosQueryHandler(repository);
 
-        // Add to service provider
         serviceProvider.AddCommandHandler(createTodoHandler);
         serviceProvider.AddCommandHandler<CompleteTodoCommand, CompleteTodoResult>(completeTodoHandler);
         serviceProvider.AddQueryHandler<GetAllTodosQuery, GetAllTodosResult>(getAllTodosHandler);
 
-        // Register handlers
-        mediator.RegisterCommandHandler(createTodoHandler);
-        mediator.RegisterCommandHandler<CompleteTodoCommand, CompleteTodoResult>(completeTodoHandler);
-        mediator.RegisterQueryHandler(getAllTodosHandler);
+        mediator.RegisterCommandHandler<CreateTodoCommand>();
+        mediator.RegisterCommandHandler<CompleteTodoCommand, CompleteTodoResult>();
+        mediator.RegisterQueryHandler<GetAllTodosQuery, GetAllTodosResult>();
 
-        // Create some todos
         await mediator.DispatchAsync(new CreateTodoCommand
         {
             Title = "Learn BrilliantMediator",
@@ -286,7 +273,6 @@ public class Program
             Description = "Create an awesome task management app"
         });
 
-        // Get all todos
         var allTodos = await mediator.SendAsync<GetAllTodosQuery, GetAllTodosResult>(
             new GetAllTodosQuery());
 
@@ -296,7 +282,6 @@ public class Program
             Console.WriteLine($"  - {todo.Title} ({todo.Status})");
         }
 
-        // Complete a todo (get first todo's ID from the repository)
         var todos = await repository.GetAllAsync();
         if (todos.Count > 0)
         {

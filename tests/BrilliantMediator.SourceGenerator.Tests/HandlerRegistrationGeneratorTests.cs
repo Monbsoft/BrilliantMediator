@@ -37,18 +37,14 @@ public class HandlerRegistrationGeneratorTests
     [Fact]
     public void Generator_NoHandlers_GeneratesEmptyAddGeneratedHandlers()
     {
-        // Arrange
         var source = """
             namespace TestAssembly;
             public class NotAHandler { }
             """;
 
         var compilation = CreateCompilation(source);
-
-        // Act
         var result = RunGenerator(compilation);
 
-        // Assert
         Assert.Empty(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         var generated = result.GeneratedSources.Single();
         Assert.Contains("AddGeneratedHandlers", generated.SourceText.ToString());
@@ -58,9 +54,9 @@ public class HandlerRegistrationGeneratorTests
     [Fact]
     public void Generator_CommandHandlerNoResponse_GeneratesCorrectRegistration()
     {
-        // Arrange
         var source = """
             using Monbsoft.BrilliantMediator.Abstractions.Commands;
+            using System.Threading;
 
             namespace TestAssembly;
 
@@ -68,17 +64,14 @@ public class HandlerRegistrationGeneratorTests
 
             public class MyCommandHandler : ICommandHandler<MyCommand>
             {
-                public System.Threading.Tasks.Task Handle(MyCommand command)
+                public System.Threading.Tasks.Task Handle(MyCommand command, CancellationToken cancellationToken = default)
                     => System.Threading.Tasks.Task.CompletedTask;
             }
             """;
 
         var compilation = CreateCompilation(source);
-
-        // Act
         var result = RunGenerator(compilation);
 
-        // Assert
         Assert.Empty(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         var generated = result.GeneratedSources.Single().SourceText.ToString();
         Assert.Contains("AddCommandHandler<TestAssembly.MyCommand, TestAssembly.MyCommandHandler>()", generated);
@@ -87,9 +80,9 @@ public class HandlerRegistrationGeneratorTests
     [Fact]
     public void Generator_CommandHandlerWithResponse_GeneratesCorrectRegistration()
     {
-        // Arrange
         var source = """
             using Monbsoft.BrilliantMediator.Abstractions.Commands;
+            using System.Threading;
 
             namespace TestAssembly;
 
@@ -98,17 +91,14 @@ public class HandlerRegistrationGeneratorTests
 
             public class MyCommandHandler : ICommandHandler<MyCommand, MyResult>
             {
-                public System.Threading.Tasks.Task<MyResult> Handle(MyCommand command)
+                public System.Threading.Tasks.Task<MyResult> Handle(MyCommand command, CancellationToken cancellationToken = default)
                     => System.Threading.Tasks.Task.FromResult(new MyResult());
             }
             """;
 
         var compilation = CreateCompilation(source);
-
-        // Act
         var result = RunGenerator(compilation);
 
-        // Assert
         Assert.Empty(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         var generated = result.GeneratedSources.Single().SourceText.ToString();
         Assert.Contains("AddCommandHandler<TestAssembly.MyCommand, TestAssembly.MyResult, TestAssembly.MyCommandHandler>()", generated);
@@ -117,9 +107,9 @@ public class HandlerRegistrationGeneratorTests
     [Fact]
     public void Generator_AbstractHandler_IsIgnored()
     {
-        // Arrange
         var source = """
             using Monbsoft.BrilliantMediator.Abstractions.Commands;
+            using System.Threading;
 
             namespace TestAssembly;
 
@@ -127,16 +117,13 @@ public class HandlerRegistrationGeneratorTests
 
             public abstract class AbstractHandler : ICommandHandler<MyCommand>
             {
-                public abstract System.Threading.Tasks.Task Handle(MyCommand command);
+                public abstract System.Threading.Tasks.Task Handle(MyCommand command, CancellationToken cancellationToken = default);
             }
             """;
 
         var compilation = CreateCompilation(source);
-
-        // Act
         var result = RunGenerator(compilation);
 
-        // Assert
         Assert.Empty(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
         var generated = result.GeneratedSources.Single().SourceText.ToString();
         Assert.DoesNotContain("AbstractHandler", generated);
@@ -145,14 +132,10 @@ public class HandlerRegistrationGeneratorTests
     [Fact]
     public void Generator_GeneratedFile_HasCorrectNamingConvention()
     {
-        // Arrange
         var source = "namespace TestAssembly; public class Dummy { }";
         var compilation = CreateCompilation(source);
-
-        // Act
         var result = RunGenerator(compilation);
 
-        // Assert
         var generatedFile = result.GeneratedSources.Single();
         Assert.Contains("Infrastructure.Generated.g.cs", generatedFile.HintName);
     }

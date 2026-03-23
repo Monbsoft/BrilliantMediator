@@ -1,4 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+﻿using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Radiant.ConsoleApp.Application.DTOs;
 using Radiant.ConsoleApp.Application.Interfaces;
 using Radiant.ConsoleApp.Application.Queries;
@@ -14,7 +14,7 @@ public class GetTodoByIdQueryHandler : IQueryHandler<GetTodoByIdQuery, TodoDto>
         _repository = repository;
     }
 
-    public async Task<TodoDto> Handle(GetTodoByIdQuery query)
+    public async Task<TodoDto> Handle(GetTodoByIdQuery query, CancellationToken cancellationToken = default)
     {
         var todo = await _repository.GetByIdAsync(query.TodoId);
         if (todo == null)

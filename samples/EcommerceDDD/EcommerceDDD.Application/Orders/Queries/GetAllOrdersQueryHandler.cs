@@ -1,6 +1,6 @@
 using EcommerceDDD.Application.Orders.Dtos;
 using EcommerceDDD.Domain.Orders;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Queries;
 
 
 namespace EcommerceDDD.Application.Orders.Queries;
@@ -14,7 +14,7 @@ public class GetAllOrdersQueryHandler : IQueryHandler<GetAllOrdersQuery, List<Or
         _orderRepository = orderRepository;
     }
 
-    public async Task<List<OrderDto>> Handle(GetAllOrdersQuery query)
+    public async Task<List<OrderDto>> Handle(GetAllOrdersQuery query, CancellationToken cancellationToken = default)
     {
       var orders = await _orderRepository.GetAllAsync();
         return orders.Select(MapToDto).ToList();

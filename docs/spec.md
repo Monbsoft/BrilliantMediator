@@ -1,7 +1,7 @@
 # BrilliantMediator — Spec & Architecture
 
 > Source de vérité du projet. Mise à jour à la fin de chaque itération.
-> Dernière mise à jour : 2026-03-20 — itération #3 (Source Generator)
+> Dernière mise à jour : 2026-03-23 — itération #4 (Refactoring SOLID v3.0.0)
 
 ---
 
@@ -15,56 +15,82 @@ sans la surcharge de performance ni la complexité des bibliothèques existantes
 
 ---
 
-## API publique — v1.3.0
+## API publique — v3.0.0 (BREAKING CHANGE)
 
-### IMediator
+### IMediator — dispatch only
 
 ```csharp
 // Commands
-Task DispatchAsync<TCommand>(TCommand command) where TCommand : ICommand;
-Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command) where TCommand : ICommand<TResponse>;
+Task DispatchAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
+  where TCommand : ICommand;
+Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command, CancellationToken cancellationToken = default)
+  where TCommand : ICommand<TResponse>;
 
 // Queries
-Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query) where TQuery : IQuery<TResponse>;
+Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query, CancellationToken cancellationToken = default)
+  where TQuery : IQuery<TResponse>;
 
 // Events
-Task PublishAsync<TEvent>(TEvent @event) where TEvent : IEvent;
+Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+  where TEvent : IEvent;
+```
 
-// Registration (DI type)
+### IHandlerRegistry — registration only (NEW)
+
+```csharp
 void RegisterCommandHandler<TCommand>() where TCommand : ICommand;
 void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TResponse>;
 void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
 void RegisterEventHandler<TEvent>() where TEvent : IEvent;
-
-// Registration (instance — tests)
-void RegisterCommandHandler<TCommand>(ICommandHandler<TCommand> handler);
-void RegisterCommandHandler<TCommand, TResponse>(ICommandHandler<TCommand, TResponse> handler);
-void RegisterQueryHandler<TQuery, TResponse>(IQueryHandler<TQuery, TResponse> handler);
-void RegisterEventHandler<TEvent>(IEventHandler<TEvent> handler);
 ```
 
-### Abstractions
+**Nota bene:**
+- Instance registration methods removed (LSP violation)
+- Mediator implements both IMediator + IHandlerRegistry
+- Application code depends only on IMediator (dispatch)
 
-| Interface | Rôle |
-|-----------|------|
-| `ICommand` | Commande sans réponse |
-| `ICommand<TResponse>` | Commande avec réponse |
-| `ICommandHandler<TCommand>` | Handler de commande sans réponse |
-| `ICommandHandler<TCommand, TResponse>` | Handler de commande avec réponse |
-| `IQuery<TResponse>` | Requête |
-| `IQueryHandler<TQuery, TResponse>` | Handler de requête |
-| `IEvent` | Événement domaine |
-| `IEventHandler<TEvent>` | Handler d'événement (multi-handler supporté) |
+### Abstractions — v3.0.0
 
-### Configuration DI
+| Interface | Rôle | Namespace |
+|-----------|------|-----------|
+| `ICommand` | Commande sans réponse | `Abstractions.Commands` |
+| `ICommand<TResponse>` | Commande avec réponse | `Abstractions.Commands` |
+| `ICommandHandler<TCommand>` | Handler de commande sans réponse (+ CancellationToken) | `Abstractions.Commands` |
+| `ICommandHandler<TCommand, TResponse>` | Handler de commande avec réponse (+ CancellationToken) | `Abstractions.Commands` |
+| `IQuery<TResponse>` | Requête | `Abstractions.Queries` |
+| `IQueryHandler<TQuery, TResponse>` | Handler de requête (+ CancellationToken) | `Abstractions.Queries` |
+| `IEvent` | Événement domaine | `Abstractions.Events` |
+| `IEventHandler<TEvent>` | Handler d'événement (multi-handler supporté, + CancellationToken) | `Abstractions.Events` |
+| `IMediatorInitializer` | Initialization bridge (NEW) | `Abstractions` |
+
+**Breaking changes v3.0.0:**
+- All handler `Handle()` methods now have `CancellationToken cancellationToken = default` parameter
+- `IQueryHandler` moved from `Abstractions.Handlers` → `Abstractions.Queries`
+- `IMediatorInitializer.Initialize(IHandlerRegistry)` instead of `Initialize(IMediator)`
+
+### Configuration DI — v3.0.0
 
 ```csharp
-// Avec Source Generator (recommandé — zéro réflexion)
-services.AddBrilliantMediator(builder => builder.AddGeneratedHandlers());
+// Setup
+var services = new ServiceCollection();
+services
+  .AddBrilliantMediator()  // returns MediatorBuilder
+  .AddCommandHandler<CreateOrderCommand, CreateOrderCommandHandler>()
+  .AddQueryHandler<GetOrderQuery, OrderDto, GetOrderQueryHandler>()
+  .AddEventHandler<OrderConfirmedEvent, OrderConfirmedEventHandler>()
+  .Build();  // returns IServiceCollection
 
-// Manuel (déprécié depuis v1.3.0)
-[Obsolete] services.AddBrilliantMediator(builder => builder.AddHandlersFromAssembly(assembly));
+var serviceProvider = services.BuildServiceProvider();
+
+// Initialization (after DI container built)
+serviceProvider.UseBrilliantMediator();  // IServiceProvider extension
+
+// Usage
+var mediator = serviceProvider.GetRequiredService<IMediator>();
+await mediator.DispatchAsync(command, cancellationToken);
 ```
+
+**Works everywhere:** Console app, Worker Service, ASP.NET Core, etc. (no coupling to IApplicationBuilder)
 
 ### Source Generator — BrilliantMediator.SourceGenerator v1.3.0
 
@@ -94,6 +120,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 | 1.1.0 | Scoping DI renforcé par handler d'événement | 2025-11-09 |
 | 1.2.0 | Migration .NET 10 | 2026-03-20 |
 | 1.3.0 | BrilliantMediator.SourceGenerator — enregistrement zéro réflexion à la compilation | 2026-03-20 |
+| 3.0.0 | SOLID refactoring: ISP split (IMediator/IHandlerRegistry), CancellationToken, decouple ASP.NET | 2026-03-23 |
 
 ---
 
@@ -104,6 +131,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 | 1 | AGENTS.md — cycle de développement itératif | Livré (PR #8) |
 | 2 | Nettoyage docs — suppression CHANGELOG/EXAMPLES/GUIDE | Livré (PR #9) |
 | 3 | BrilliantMediator.SourceGenerator | Livré |
+| 4 | SOLID refactoring: ISP/DIP + CancellationToken + decouple ASP.NET | Livré |
 
 ---
 
@@ -133,16 +161,52 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Décision :** Créer `BrilliantMediator.SourceGenerator` (Roslyn `IIncrementalGenerator`) qui scanne les handlers à la compilation et génère `AddGeneratedHandlers(this MediatorBuilder)`. Les méthodes `AddHandlersFromAssembly*` sont marquées `[Obsolete]` avec message de migration vers v2.0.0. Configuration des assemblies supplémentaires via `[assembly: ScanHandlersFrom(typeof(T))]`.
 - **Conséquences :** Zéro réflexion à l'exécution y compris au démarrage. Erreurs de configuration détectées à la compilation. `AddHandlersFromAssembly*` restent fonctionnelles jusqu'à v2.0.0 pour la compatibilité.
 
+### ADR-005 — SOLID refactoring v3.0.0
+
+**Interface Segregation Principle (ISP)**
+- **Contexte :** `IMediator` contenait 8 méthodes (4 dispatch + 4 registration), mélangeant deux responsabilités distinctes.
+- **Décision :** Scinder en `IMediator` (dispatch: 4 méthodes) + `IHandlerRegistry` (registration: 4 méthodes). `Mediator` implémente les deux; application code dépend uniquement de `IMediator`.
+- **Conséquences :** API plus claire. Chaque interface a une seule raison de changer. Tests simplifiés.
+
+**Dependency Inversion Principle (DIP)**
+- **Contexte :** `UseBrilliantMediator()` sur `IApplicationBuilder` couplait la lib à ASP.NET Core.
+- **Décision :** Déplacer sur `IServiceProvider` (déjà une dépendance minimale). Works: Console, Worker Service, ASP.NET Core, Unity, etc.
+- **Conséquences :** Zero ASP.NET coupling. Flexible deployment.
+
+**Liskov Substitution Principle (LSP)**
+- **Contexte :** Méthodes `RegisterCommandHandler(handler)` acceptaient une instance mais jetaient silencieusement le handler (stockaient juste le Type pour DI lookup).
+- **Décision :** Supprimer les surcharges instance. Enregistrement via `Register*<T>()` DI-based uniquement.
+- **Conséquences :** Comportement prévisible. Moins de confusion tests.
+
+**CancellationToken support**
+- **Contexte :** Async handlers sans `CancellationToken` ne respectent pas les bonnes pratiques async .NET.
+- **Décision :** Ajouter `CancellationToken cancellationToken = default` sur tous les handlers et méthodes dispatch.
+- **Conséquences :** Full async support. Graceful shutdown + timeout handling.
+
+**Thread safety improvements**
+- **Contexte :** Event handlers utilisaient `List<Type>` + `lock`, laissant le chemin critique bloqué.
+- **Décision :** Remplacer par `ImmutableList<Type>` (lock-free reads).
+- **Conséquences :** Better contention characteristics. Immutable snapshots.
+
 ---
 
 ## Dette technique
 
-- `PublishAsync` utilise un `lock` sur `List<Type>` lors de la copie des handlers — pourrait être remplacé par `ImmutableList<T>` pour éliminer le lock dans le chemin chaud.
-- Les handlers d'instances dans `RegisterCommandHandler(handler)` ne stockent que le type — l'instance n'est pas utilisée lors du dispatch DI (comportement potentiellement surprenant en tests).
-- Des fonctionnalités listées comme "à venir" (diagnostics, middlewares, CancellationToken, i18n) ne sont pas implémentées — à créer en issues GitHub ou à abandonner explicitement.
+Aucune dette structurelle identifiée après v3.0.0.
+
+**Abandonné intentionnellement:**
+- `MediatorOptions`, `MediatorDiagnosticEvent`, `MediatorEventType` — diagnostics sans cas d'usage clair
+- Middlewares — ajouteraient de la complexité sans bénéfice clair pour la majorité
+- Instance registration methods — nécessitaient DI lookup, ajoutaient de la confusion
+- `AddHandlersFromAssembly*` — préfacer le Source Generator (Obsolete en v3.0.0, sera supprimé en v4.0.0)
 
 ---
 
 ## Prochaine itération
 
-Aucune planifiée. À définir lors de la prochaine session.
+**Candidates:**
+- v3.1.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`
+- v4.0.0 — Remove `[Obsolete] AddHandlersFromAssembly*` methods
+- Diagnostics dashboard (opt-in, external service)
+
+À valider lors de la prochaine session.

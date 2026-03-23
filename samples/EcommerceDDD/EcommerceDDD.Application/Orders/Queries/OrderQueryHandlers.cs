@@ -1,7 +1,7 @@
 using EcommerceDDD.Application.Orders.Dtos;
 using EcommerceDDD.Domain.Orders;
 using EcommerceDDD.Domain.Orders.Exceptions;
-using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Queries;
 
 
 namespace EcommerceDDD.Application.Orders.Queries;
@@ -15,7 +15,7 @@ public class GetOrderByIdQueryHandler : IQueryHandler<GetOrderByIdQuery, OrderDt
    _orderRepository = orderRepository;
     }
 
-    public async Task<OrderDto> Handle(GetOrderByIdQuery query)
+    public async Task<OrderDto> Handle(GetOrderByIdQuery query, CancellationToken cancellationToken = default)
     {
     var order = await _orderRepository.GetByIdAsync(query.OrderId)
             ?? throw new OrderNotFoundException(query.OrderId);
@@ -57,7 +57,7 @@ public class GetUserOrdersQueryHandler : IQueryHandler<GetUserOrdersQuery, List<
         _orderRepository = orderRepository;
     }
 
-    public async Task<List<OrderDto>> Handle(GetUserOrdersQuery query)
+    public async Task<List<OrderDto>> Handle(GetUserOrdersQuery query, CancellationToken cancellationToken = default)
  {
         var orders = await _orderRepository.GetByUserIdAsync(query.UserId);
      return orders.Select(MapToDto).ToList();

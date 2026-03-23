@@ -23,7 +23,7 @@ public class PlaceOrderCommandHandler : ICommandHandler<PlaceOrderCommand, Place
         _mediator = mediator;
     }
 
-    public async Task<PlaceOrderResult> Handle(PlaceOrderCommand command)
+    public async Task<PlaceOrderResult> Handle(PlaceOrderCommand command, CancellationToken cancellationToken = default)
     {
         // Convertir les DTOs en value objects
         var orderItems = command.Items

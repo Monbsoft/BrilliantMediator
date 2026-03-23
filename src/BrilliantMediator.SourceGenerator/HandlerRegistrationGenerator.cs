@@ -14,7 +14,7 @@ public sealed class HandlerRegistrationGenerator : IIncrementalGenerator
     private const string CommandHandlerWithResponseMetadataName =
         "Monbsoft.BrilliantMediator.Abstractions.Commands.ICommandHandler`2";
     private const string QueryHandlerMetadataName =
-        "Monbsoft.BrilliantMediator.Abstractions.Handlers.IQueryHandler`2";
+        "Monbsoft.BrilliantMediator.Abstractions.Queries.IQueryHandler`2";
     private const string EventHandlerMetadataName =
         "Monbsoft.BrilliantMediator.Abstractions.Events.IEventHandler`1";
     private const string GeneratorAttributeMetadataName =

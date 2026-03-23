@@ -1,4 +1,4 @@
-﻿using Monbsoft.BrilliantMediator.Abstractions.Handlers;
+﻿using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Radiant.ConsoleApp.Application.Domain;
 using Radiant.ConsoleApp.Application.DTOs;
 using Radiant.ConsoleApp.Application.Interfaces;
@@ -19,7 +19,7 @@ public class GetAllTodosQueryHandler : IQueryHandler<GetAllTodosQuery, GetAllTod
         _repository = repository;
     }
 
-    public async Task<GetAllTodosResult> Handle(GetAllTodosQuery query)
+    public async Task<GetAllTodosResult> Handle(GetAllTodosQuery query, CancellationToken cancellationToken = default)
     {
         var todos = await _repository.GetAllAsync();
 

@@ -1,4 +1,4 @@
-﻿namespace Monbsoft.BrilliantMediator.Abstractions.Commands;
+namespace Monbsoft.BrilliantMediator.Abstractions.Commands;
 
 /// <summary>
 /// Handler for a command that does not return a response.
@@ -10,8 +10,9 @@ public interface ICommandHandler<in TCommand> where TCommand : ICommand
     /// Handles the command asynchronously.
     /// </summary>
     /// <param name="command">The command to handle.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when the command is handled.</returns>
-    Task Handle(TCommand command);
+    Task Handle(TCommand command, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -25,6 +26,7 @@ public interface ICommandHandler<in TCommand, TResponse> where TCommand : IComma
     /// Handles the command asynchronously and returns a response.
     /// </summary>
     /// <param name="command">The command to handle.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes with the response when the command is handled.</returns>
-    Task<TResponse> Handle(TCommand command);
+    Task<TResponse> Handle(TCommand command, CancellationToken cancellationToken = default);
 }

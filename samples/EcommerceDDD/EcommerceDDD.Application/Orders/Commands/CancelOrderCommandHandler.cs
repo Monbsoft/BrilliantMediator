@@ -16,7 +16,7 @@ public class CancelOrderCommandHandler : ICommandHandler<CancelOrderCommand>
         _mediator = mediator;
     }
 
-    public async Task Handle(CancelOrderCommand command)
+    public async Task Handle(CancelOrderCommand command, CancellationToken cancellationToken = default)
     {
  var order = await _orderRepository.GetByIdAsync(command.OrderId)
       ?? throw new OrderNotFoundException(command.OrderId);

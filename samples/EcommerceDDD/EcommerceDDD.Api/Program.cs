@@ -47,7 +47,7 @@ if (app.Environment.IsDevelopment())
   });
 }
 
-app.UseBrilliantMediator();
+app.Services.UseBrilliantMediator();
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
