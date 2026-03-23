@@ -8,348 +8,189 @@
 
 ## What is BrilliantMediator?
 
-BrilliantMediator is an extremely lightweight implementation of the **Mediator Pattern** with full **CQRS (Command Query Responsibility Segregation)** and **Event support**. 
+BrilliantMediator is an extremely lightweight implementation of the **Mediator Pattern** with full **CQRS** and **Event support**.
 
-Designed for **maximum performance** with **zero reflection at runtime**, it provides a type-safe API with compile-time verification. Perfect for high-performance applications, microservices, and clean architecture implementations.
+Designed for **maximum performance** with **zero reflection at runtime**, it provides a type-safe API with compile-time verification.
 
 ## Key Features
 
-✨ **Zero-Reflection Architecture** - All decisions made at compile-time, not runtime  
-⚡ **Blazing Fast** - ~50ns per operation overhead, approaching bare method calls  
-🎯 **Full CQRS Support** - Commands, Queries, and Events with type-safe API  
-📦 **Fire-and-Forget Events** - Parallel event publishing with built-in coordination  
-🔐 **Type-Safe** - Compile-time verification via generics with zero runtime checks  
-💾 **Zero Allocations** - Minimal memory overhead with optimized data structures  
-🔌 **No External Dependencies** - Lightweight core with minimal requirements  
-🎪 **ASP.NET Core Integration** - Built-in dependency injection support  
-📖 **Well Documented** - Complete examples and guides included  
+✨ **Zero-Reflection Architecture** — All handler lookup via `ConcurrentDictionary`, no `GetType()` or assembly scanning at runtime
+⚡ **Blazing Fast** — ~50ns per operation overhead
+🎯 **Full CQRS Support** — Commands, Queries, and Events
+📦 **Parallel Events** — Multiple handlers per event, executed in parallel with isolated DI scopes
+🔐 **Type-Safe** — Compile-time verification via generics
+🔌 **DI Scoped per call** — Each dispatch creates its own `IServiceScope` (safe for `DbContext`, etc.)
+🛠️ **Source Generator** — `BrilliantMediator.SourceGenerator` generates handler registration at compile time
+🌐 **Framework Agnostic** — Console, Worker Service, ASP.NET Core — no coupling to `IApplicationBuilder`
 
 ## Quick Start
 
-### 1. Install the Package
+### 1. Install
 
 ```bash
 dotnet add package BrilliantMediator
+# Optional: zero-reflection handler auto-registration
+dotnet add package BrilliantMediator.SourceGenerator
 ```
 
-Or via NuGet Package Manager:
-```
-Install-Package BrilliantMediator
-```
-
-### 2. Configure Dependency Injection
-
-In your `Program.cs`:
+### 2. Configure DI
 
 ```csharp
-using Monbsoft.BrilliantMediator;
+using Monbsoft.BrilliantMediator.Extensions;
 
-var builder = WebApplicationBuilder.CreateBuilder(args);
+services
+    .AddBrilliantMediator()
+    .AddCommandHandler<CreateOrderCommand, OrderDto, CreateOrderCommandHandler>()
+    .AddQueryHandler<GetOrderQuery, OrderDto, GetOrderQueryHandler>()
+    .AddEventHandler<OrderConfirmedEvent, SendConfirmationEmailHandler>()
+    .Build();
 
-// Add BrilliantMediator with automatic handler discovery
-builder.Services.AddBrilliantMediator(typeof(Program).Assembly);
-
-var app = builder.Build();
+var serviceProvider = services.BuildServiceProvider();
+serviceProvider.UseBrilliantMediator();
 ```
 
-### 3. Create Your First Command Handler
+### 2b. Or use the Source Generator (zero boilerplate)
+
+Add to your `.csproj`:
+
+```xml
+<PackageReference Include="BrilliantMediator.SourceGenerator"
+                  Version="3.0.0"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+Then:
 
 ```csharp
-using Monbsoft.BrilliantMediator;
+services
+    .AddBrilliantMediator()
+    .AddGeneratedHandlers()   // generated at compile time — no reflection
+    .Build();
 
-// Define a command with response
-public class CreateUserCommand : ICommand<UserDto>
+serviceProvider.UseBrilliantMediator();
+```
+
+To scan handlers from additional assemblies, add the attribute in your entry-point project:
+
+```csharp
+[assembly: BrilliantMediatorGenerator(
+    Namespace = "MyApp.Infrastructure.Generated",
+    Assemblies = [typeof(MyCommandHandler), typeof(MyQueryHandler)])]
+```
+
+The current assembly is always scanned. `Assemblies` lets you include handlers from other referenced assemblies.
+
+### 3. Define Handlers
+
+```csharp
+// Command with response
+public class CreateOrderCommand : ICommand<OrderDto>
 {
-    public string Name { get; set; }
-    public string Email { get; set; }
+    public Guid CustomerId { get; set; }
+    public List<OrderItem> Items { get; set; } = new();
 }
 
-// Create a handler
-public class CreateUserCommandHandler : ICommandHandler<CreateUserCommand, UserDto>
+public class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand, OrderDto>
 {
-    private readonly IUserRepository _repository;
+    private readonly IOrderRepository _repository;
 
-    public CreateUserCommandHandler(IUserRepository repository)
+    public CreateOrderCommandHandler(IOrderRepository repository)
     {
-     _repository = repository;
+        _repository = repository;
     }
 
-    public async Task<UserDto> Handle(CreateUserCommand command, CancellationToken cancellationToken)
+    public async Task<OrderDto> Handle(CreateOrderCommand command, CancellationToken cancellationToken = default)
     {
-        var user = new User
-        {
-       Id = Guid.NewGuid(),
-   Name = command.Name,
-  Email = command.Email
-        };
-
-        await _repository.AddAsync(user, cancellationToken);
-      
-        return new UserDto 
-        { 
-            Id = user.Id, 
-            Name = user.Name, 
- Email = user.Email 
-   };
+        var order = await _repository.CreateAsync(command.CustomerId, command.Items, cancellationToken);
+        return new OrderDto { Id = order.Id, Total = order.Total };
     }
 }
 ```
 
-### 4. Use the Mediator
+### 4. Dispatch
 
 ```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class UsersController : ControllerBase
-{
-    private readonly IMediator _mediator;
+var mediator = serviceProvider.GetRequiredService<IMediator>();
 
-    public UsersController(IMediator mediator)
-    {
-     _mediator = mediator;
-    }
+// Command with response
+var order = await mediator.DispatchAsync<CreateOrderCommand, OrderDto>(command, cancellationToken);
 
-    [HttpPost]
-    public async Task<ActionResult<UserDto>> Create(
-        [FromBody] CreateUserCommand command,
-        CancellationToken cancellationToken)
-    {
-  var result = await _mediator.DispatchAsync<CreateUserCommand, UserDto>(
-       command, 
-      cancellationToken);
-     
-        return CreatedAtAction(nameof(Create), result);
-    }
-}
+// Command without response
+await mediator.DispatchAsync(new SendEmailCommand { To = "user@example.com" }, cancellationToken);
+
+// Query
+var result = await mediator.SendAsync<GetOrderQuery, OrderDto>(query, cancellationToken);
+
+// Event (all handlers run in parallel)
+await mediator.PublishAsync(new OrderConfirmedEvent { OrderId = order.Id }, cancellationToken);
 ```
 
-## Usage Patterns
-
-### Commands (without response)
+## Handler Interfaces
 
 ```csharp
-// Define command
-public class SendEmailCommand : ICommand
+// Command without response
+public interface ICommandHandler<in TCommand> where TCommand : ICommand
 {
-    public string To { get; set; }
-    public string Subject { get; set; }
-    public string Body { get; set; }
+    Task Handle(TCommand command, CancellationToken cancellationToken = default);
 }
 
-// Handler
-public class SendEmailCommandHandler : ICommandHandler<SendEmailCommand>
+// Command with response
+public interface ICommandHandler<in TCommand, TResponse> where TCommand : ICommand<TResponse>
 {
-    public async Task Handle(SendEmailCommand command, CancellationToken cancellationToken)
-    {
-        // Send email...
-        await Task.CompletedTask;
-    }
+    Task<TResponse> Handle(TCommand command, CancellationToken cancellationToken = default);
 }
 
-// Usage
-await mediator.DispatchAsync(command);
+// Query
+public interface IQueryHandler<in TQuery, TResponse> where TQuery : IQuery<TResponse>
+{
+    Task<TResponse> Handle(TQuery query, CancellationToken cancellationToken = default);
+}
+
+// Event
+public interface IEventHandler<in TEvent> where TEvent : IEvent
+{
+    Task Handle(TEvent @event, CancellationToken cancellationToken = default);
+}
 ```
-
-### Queries
-
-```csharp
-// Define query
-public class GetUserByIdQuery : IQuery<UserDto>
-{
-    public Guid Id { get; set; }
-}
-
-// Handler
-public class GetUserByIdQueryHandler : IQueryHandler<GetUserByIdQuery, UserDto>
-{
-    private readonly IUserRepository _repository;
-
-    public async Task<UserDto> Handle(GetUserByIdQuery query, CancellationToken cancellationToken)
-    {
-        var user = await _repository.GetByIdAsync(query.Id, cancellationToken);
-        return MapToDto(user);
-    }
-}
-
-// Usage
-var user = await mediator.QueryAsync<GetUserByIdQuery, UserDto>(
-    new GetUserByIdQuery { Id = userId }, 
-    cancellationToken);
-```
-
-### Events (Fire-and-Forget)
-
-```csharp
-// Define event
-public class UserCreatedEvent : IEvent
-{
-    public Guid UserId { get; set; }
-    public string Email { get; set; }
-}
-
-// Event handler 1
-public class SendWelcomeEmailEventHandler : IEventHandler<UserCreatedEvent>
-{
-    private readonly IEmailService _emailService;
-
-    public async Task Handle(UserCreatedEvent @event, CancellationToken cancellationToken)
-{
-        await _emailService.SendWelcomeEmailAsync(@event.Email, cancellationToken);
-    }
-}
-
-// Event handler 2
-public class LogUserCreationEventHandler : IEventHandler<UserCreatedEvent>
-{
-    private readonly ILogger<LogUserCreationEventHandler> _logger;
-
-  public async Task Handle(UserCreatedEvent @event, CancellationToken cancellationToken)
-    {
-        _logger.LogInformation($"User created: {UserCreatedEvent.UserId}");
-        await Task.CompletedTask;
-    }
-}
-
-// Publish event - all handlers run in parallel
-await mediator.PublishAsync(new UserCreatedEvent 
-{ 
-    UserId = userId, 
-    Email = command.Email 
-}, cancellationToken);
-```
-
-## Advanced Configuration
-
-### Multiple Assembly Discovery
-
-```csharp
-builder.Services.AddBrilliantMediator(
-    typeof(Program).Assembly,
-typeof(MyDomainLib.DummyType).Assembly,
-    typeof(MyApplicationLib.DummyType).Assembly
-);
-```
-
-### Manual Handler Registration
-
-```csharp
-var mediator = new Mediator(serviceProvider);
-
-// Register command handler
-Mediator.RegisterCommandHandler<CreateUserCommand, UserDto>(
-    command => new CreateUserCommandHandler().Handle(command, default)
-);
-
-// Register query handler
-Mediator.RegisterQueryHandler<GetUserByIdQuery, UserDto>(
-    query => new GetUserByIdQueryHandler().Handle(query, default)
-);
-
-// Register event handler
-Mediator.RegisterEventHandler<UserCreatedEvent>(
-    @event => new UserCreatedEventHandler().Handle(@event, default)
-);
-```
-
-## Performance
-
-BrilliantMediator is engineered for **maximum performance**:
-
-- **~50ns overhead** per mediator call (approaching bare method calls)
-- **O(1) lookup time** for all handler types
-- **Zero intermediate allocations** - no temporary objects created
-- **No reflection at runtime** - all decisions at compile-time
-- **JIT-optimizable** - critical paths are short and predictable
-
-Benchmark results show BrilliantMediator consistently outperforms traditional reflection-based mediators.
-
-## Real-World Example: E-Commerce DDD
-
-The package includes a complete **Domain-Driven Design (DDD)** example with:
-
-- Clean architecture layers (Domain, Application, Infrastructure, API)
-- Aggregate roots and value objects
-- Domain services and repositories
-- Complete CQRS command/query workflow
-- Event-driven order processing
-
-See the `samples/EcommerceDDD` directory for a production-ready implementation.
 
 ## API Reference
 
 ### IMediator
 
 ```csharp
-public interface IMediator
-{
-    // Commands with response
-    Task<TResponse> DispatchAsync<TCommand, TResponse>(
- TCommand command, 
-        CancellationToken cancellationToken = default)
-        where TCommand : ICommand<TResponse>;
-
-    // Commands without response
-    Task DispatchAsync<TCommand>(
-        TCommand command, 
-        CancellationToken cancellationToken = default)
+Task DispatchAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
     where TCommand : ICommand;
 
-    // Queries
-    Task<TResponse> QueryAsync<TQuery, TResponse>(
-        TQuery query, 
-   CancellationToken cancellationToken = default)
-     where TQuery : IQuery<TResponse>;
+Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command, CancellationToken cancellationToken = default)
+    where TCommand : ICommand<TResponse>;
 
-    // Events
-    Task PublishAsync<TEvent>(
-        TEvent @event, 
-   CancellationToken cancellationToken = default)
- where TEvent : IEvent;
-}
+Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query, CancellationToken cancellationToken = default)
+    where TQuery : IQuery<TResponse>;
+
+Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+    where TEvent : IEvent;
 ```
+
+## Performance
+
+- **~50ns overhead** per mediator call
+- **O(1) lookup** via `ConcurrentDictionary`
+- **No reflection at runtime** — handler types registered explicitly at startup or via Source Generator
+- **Isolated DI scope per call** — safe for scoped services (`DbContext`, unit-of-work, etc.)
 
 ## Supported .NET Versions
 
-- **.NET 9.0**
-- **.NET 8.0**
-- **.NET 7.0**
-- **.NET 6.0**
-
-## Requirements
-
-- .NET 6.0 or later
-- Microsoft.Extensions.DependencyInjection (for DI integration)
-
-## Contributing
-
-We welcome contributions! Please feel free to:
-
-- Report bugs via [GitHub Issues](https://github.com/Monbsoft/BrilliantMediator/issues)
-- Submit feature requests
-- Create pull requests with improvements
-
-For detailed contribution guidelines, see [CONTRIBUTING.md](https://github.com/Monbsoft/BrilliantMediator/blob/main/CONTRIBUTING.md)
-
-## Support & Feedback
-
-- 📖 Full documentation: [GitHub Wiki](https://github.com/Monbsoft/BrilliantMediator/wiki)
-- 🐛 Bug reports: [GitHub Issues](https://github.com/Monbsoft/BrilliantMediator/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/Monbsoft/BrilliantMediator/discussions)
+- **.NET 10.0**
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/Monbsoft/BrilliantMediator/blob/main/LICENSE) file for details.
-
-## Changelog
-
-See [GitHub Releases](https://github.com/Monbsoft/BrilliantMediator/releases) for a detailed list of changes in each version.
+MIT — see [LICENSE](https://github.com/Monbsoft/BrilliantMediator/blob/main/LICENSE)
 
 ## Author
 
-Created by **[Monbsoft](https://github.com/Monbsoft)** - Building brilliant software solutions.
+Created by **[Monbsoft](https://github.com/Monbsoft)**.
 
 ---
 
-**Ready to take your .NET architecture to the next level with BrilliantMediator?**
-
-⭐ If you find this project helpful, please consider giving it a star on [GitHub](https://github.com/Monbsoft/BrilliantMediator)!
+⭐ If you find this project helpful, please give it a star on [GitHub](https://github.com/Monbsoft/BrilliantMediator)!

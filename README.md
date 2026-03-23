@@ -1,8 +1,9 @@
 # BrilliantMediator
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![.NET](https://img.shields.io/badge/.NET-9%2B-blue)
+![.NET](https://img.shields.io/badge/.NET-10.0-blue)
 ![NuGet](https://img.shields.io/badge/NuGet-BrilliantMediator-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 
 **Ultra-lightweight, zero-reflection mediator for .NET with blazing performance.**
 
@@ -10,23 +11,28 @@ BrilliantMediator is a high-performance implementation of the Mediator pattern t
 
 ## ✨ Key Features
 
-- ⚡ **Zero Reflection** - Uses compiled generics for maximum performance
-- 🚀 **Blazing Fast** - Overhead approaching direct method calls (~50ns per operation)
-- 🎯 **Type-Safe** - Full compile-time checking
+- ⚡ **Zero Reflection** - Uses compiled generics, no `typeof()` lookups at runtime
+- 🚀 **Blazing Fast** - Overhead < 50ns per operation
+- 🎯 **Type-Safe** - Full compile-time checking via generics
 - 📦 **Tiny** - ~100 lines of core code
 - 🔧 **Simple** - Easy to understand and maintain
-- 🌐 **Framework Agnostic** - Works with any .NET application
-- 📋 **CQRS Ready** - Commands and Queries out of the box
+- 🌐 **Framework Agnostic** - Works with any .NET host (Console, Worker Service, ASP.NET Core)
+- 📋 **CQRS + Events** - Commands, Queries, and parallel Events out of the box
+- 🛠️ **Source Generator** - Zero-reflection handler registration generated at compile time
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `BrilliantMediator` | Core library |
+| `BrilliantMediator.SourceGenerator` | Roslyn generator — registers handlers at compile time |
 
 ## Installation
 
 ```bash
 dotnet add package BrilliantMediator
-```
-
-Or from NuGet:
-```
-Install-Package BrilliantMediator
+# Optional: auto-register handlers at compile time
+dotnet add package BrilliantMediator.SourceGenerator
 ```
 
 ## Quick Start
@@ -34,12 +40,12 @@ Install-Package BrilliantMediator
 ### 1. Define a Command
 
 ```csharp
-using BrilliantMediator.Abstractions.Commands;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
 
 public class CreateUserCommand : ICommand<CreateUserResult>
 {
-    public string Name { get; set; }
-    public string Email { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
 }
 
 public class CreateUserResult
@@ -52,7 +58,7 @@ public class CreateUserResult
 ### 2. Create a Handler
 
 ```csharp
-using BrilliantMediator.Abstractions.Handlers;
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
 
 public class CreateUserCommandHandler : ICommandHandler<CreateUserCommand, CreateUserResult>
 {
@@ -63,30 +69,35 @@ public class CreateUserCommandHandler : ICommandHandler<CreateUserCommand, Creat
         _repository = repository;
     }
 
-    public async Task<CreateUserResult> Handle(CreateUserCommand command)
+    public async Task<CreateUserResult> Handle(CreateUserCommand command, CancellationToken cancellationToken = default)
     {
         var user = new User { Id = Guid.NewGuid(), Name = command.Name, Email = command.Email };
-        await _repository.AddAsync(user);
-        
+        await _repository.AddAsync(user, cancellationToken);
         return new CreateUserResult { UserId = user.Id, Success = true };
     }
 }
 ```
 
-### 3. Register and Use
+### 3. Configure DI and Use
 
 ```csharp
-using BrilliantMediator.Core;
+using Monbsoft.BrilliantMediator.Extensions;
 
-// Create mediator
-var mediator = new Mediator();
+// Startup / Program.cs
+var services = new ServiceCollection();
 
-// Register handler
-var handler = new CreateUserCommandHandler(userRepository);
-mediator.RegisterCommandHandler<CreateUserCommand, CreateUserResult>(handler);
+services
+    .AddBrilliantMediator()
+    .AddCommandHandler<CreateUserCommand, CreateUserResult, CreateUserCommandHandler>()
+    // chain other handlers...
+    .Build();
 
-// Use it
-var result = await mediator.Send<CreateUserCommand, CreateUserResult>(
+var serviceProvider = services.BuildServiceProvider();
+serviceProvider.UseBrilliantMediator(); // initialize handler registry
+
+// Usage
+var mediator = serviceProvider.GetRequiredService<IMediator>();
+var result = await mediator.DispatchAsync<CreateUserCommand, CreateUserResult>(
     new CreateUserCommand { Name = "John", Email = "john@example.com" }
 );
 ```
@@ -102,20 +113,21 @@ Commands represent actions that modify state.
 ```csharp
 public class SendEmailCommand : ICommand
 {
-    public string To { get; set; }
-    public string Subject { get; set; }
+    public string To { get; set; } = string.Empty;
+    public string Subject { get; set; } = string.Empty;
 }
 
 public class SendEmailCommandHandler : ICommandHandler<SendEmailCommand>
 {
-    public async Task Handle(SendEmailCommand command)
+    public async Task Handle(SendEmailCommand command, CancellationToken cancellationToken = default)
     {
-        // Send email
+        // Send email...
+        await Task.CompletedTask;
     }
 }
 
 // Usage
-await mediator.Send(new SendEmailCommand { To = "user@example.com", Subject = "Hello" });
+await mediator.DispatchAsync(new SendEmailCommand { To = "user@example.com", Subject = "Hello" });
 ```
 
 #### Command with Response
@@ -129,14 +141,14 @@ public class CalculateCommand : ICommand<int>
 
 public class CalculateCommandHandler : ICommandHandler<CalculateCommand, int>
 {
-    public async Task<int> Handle(CalculateCommand command)
+    public Task<int> Handle(CalculateCommand command, CancellationToken cancellationToken = default)
     {
-        return command.A + command.B;
+        return Task.FromResult(command.A + command.B);
     }
 }
 
 // Usage
-var result = await mediator.Send<CalculateCommand, int>(
+var result = await mediator.DispatchAsync<CalculateCommand, int>(
     new CalculateCommand { A = 5, B = 3 }
 );
 Console.WriteLine(result); // 8
@@ -147,6 +159,8 @@ Console.WriteLine(result); // 8
 Queries represent read operations that don't modify state.
 
 ```csharp
+using Monbsoft.BrilliantMediator.Abstractions.Queries;
+
 public class GetUserQuery : IQuery<UserDto>
 {
     public Guid UserId { get; set; }
@@ -161,161 +175,132 @@ public class GetUserQueryHandler : IQueryHandler<GetUserQuery, UserDto>
         _repository = repository;
     }
 
-    public async Task<UserDto> Handle(GetUserQuery query)
+    public async Task<UserDto> Handle(GetUserQuery query, CancellationToken cancellationToken = default)
     {
-        var user = await _repository.GetByIdAsync(query.UserId);
+        var user = await _repository.GetByIdAsync(query.UserId, cancellationToken);
         return new UserDto { Id = user.Id, Name = user.Name, Email = user.Email };
     }
 }
 
 // Usage
-var userDto = await mediator.Send<GetUserQuery, UserDto>(
+var userDto = await mediator.SendAsync<GetUserQuery, UserDto>(
     new GetUserQuery { UserId = userId }
 );
 ```
 
-## Dependency Injection
+### Events (Fire-and-Forget)
 
-### With Microsoft.Extensions.DependencyInjection
-
-```csharp
-using Microsoft.Extensions.DependencyInjection;
-using BrilliantMediator.DependencyInjection;
-
-var services = new ServiceCollection();
-
-// Add BrilliantMediator and auto-discover handlers
-services.AddBrilliantMediator(typeof(Program).Assembly);
-
-// Or specify multiple assemblies
-services.AddBrilliantMediator(
-    typeof(Program).Assembly,
-    typeof(SomeOtherClass).Assembly
-);
-
-var provider = services.BuildServiceProvider();
-var mediator = provider.GetRequiredService<Mediator>();
-```
-
-### Why so fast?
-
-1. **No Reflection** - Uses static generic registries
-2. **Zero Allocations** - No intermediate objects created
-3. **Compile-time Verification** - All dispatch decisions made at compile time
-4. **JIT Inlining** - Methods small enough to inline
-
-## Architecture
-
-BrilliantMediator uses a unique approach based on static generic registries:
+Multiple handlers can be registered for the same event — they run in parallel.
 
 ```csharp
-// Internally:
-private sealed class CommandHandlerRegistry<TCommand> where TCommand : ICommand
-{
-    public static ICommandHandler<TCommand> Instance { get; set; }
-}
+using Monbsoft.BrilliantMediator.Abstractions.Events;
 
-// When you call Send<TCommand>(), the JIT directly accesses this static field
-// No dictionaries, no Type lookups, no reflection
-```
-
-This ensures:
-- **O(1)** lookup time for any command/query
-- **Zero runtime overhead** compared to direct method calls
-- **Full type safety** at compile time
-
-## When to Use BrilliantMediator
-
-✅ **Use BrilliantMediator if:**
-- Performance is critical
-- You want a simple, minimal implementation
-- You're building an MVP
-- You want to avoid external dependencies
-- You need CQRS pattern
-
-## Examples
-
-### Example: E-Commerce Order Processing
-
-```csharp
-// Command
-public class PlaceOrderCommand : ICommand<PlaceOrderResult>
+public class UserCreatedEvent : IEvent
 {
     public Guid UserId { get; set; }
-    public List<OrderItem> Items { get; set; }
+    public string Email { get; set; } = string.Empty;
 }
 
-public class PlaceOrderResult
+public class SendWelcomeEmailHandler : IEventHandler<UserCreatedEvent>
 {
-    public Guid OrderId { get; set; }
-    public decimal TotalAmount { get; set; }
-}
-
-// Handler
-public class PlaceOrderCommandHandler : ICommandHandler<PlaceOrderCommand, PlaceOrderResult>
-{
-    private readonly IOrderRepository _orderRepo;
-    private readonly IPaymentService _paymentService;
-
-    public PlaceOrderCommandHandler(IOrderRepository orderRepo, IPaymentService paymentService)
+    public async Task Handle(UserCreatedEvent @event, CancellationToken cancellationToken = default)
     {
-        _orderRepo = orderRepo;
-        _paymentService = paymentService;
-    }
-
-    public async Task<PlaceOrderResult> Handle(PlaceOrderCommand command)
-    {
-        var order = new Order 
-        { 
-            Id = Guid.NewGuid(),
-            UserId = command.UserId,
-            Items = command.Items,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        var totalAmount = order.Items.Sum(i => i.Price * i.Quantity);
-        order.TotalAmount = totalAmount;
-
-        await _paymentService.ProcessPayment(command.UserId, totalAmount);
-        await _orderRepo.AddAsync(order);
-
-        return new PlaceOrderResult 
-        { 
-            OrderId = order.Id,
-            TotalAmount = totalAmount
-        };
+        // Send welcome email...
+        await Task.CompletedTask;
     }
 }
+
+public class AuditUserCreationHandler : IEventHandler<UserCreatedEvent>
+{
+    public async Task Handle(UserCreatedEvent @event, CancellationToken cancellationToken = default)
+    {
+        // Log audit entry...
+        await Task.CompletedTask;
+    }
+}
+
+// Publish — both handlers run in parallel
+await mediator.PublishAsync(new UserCreatedEvent { UserId = userId, Email = "user@example.com" });
 ```
 
-## API Reference
+## Dependency Injection
 
-### Mediator Methods
+### Manual registration (fluent builder)
 
 ```csharp
-// Send command without response
-public async Task Send<TCommand>(TCommand command) where TCommand : ICommand
+services
+    .AddBrilliantMediator()
+    .AddCommandHandler<CreateUserCommand, UserDto, CreateUserCommandHandler>()
+    .AddCommandHandler<DeleteUserCommand, DeleteUserCommandHandler>()
+    .AddQueryHandler<GetUserQuery, UserDto, GetUserQueryHandler>()
+    .AddEventHandler<UserCreatedEvent, SendWelcomeEmailHandler>()
+    .AddEventHandler<UserCreatedEvent, AuditUserCreationHandler>()
+    .Build();
 
-// Send command with response
-public async Task<TResponse> Send<TCommand, TResponse>(TCommand command) 
-    where TCommand : ICommand<TResponse>
-
-// Send query
-public async Task<TResponse> Send<TQuery, TResponse>(TQuery query) 
-    where TQuery : IQuery<TResponse>
-
-// Register command handler without response
-public void RegisterCommandHandler<TCommand>(ICommandHandler<TCommand> handler) 
-    where TCommand : ICommand
-
-// Register command handler with response
-public void RegisterCommandHandler<TCommand, TResponse>(ICommandHandler<TCommand, TResponse> handler) 
-    where TCommand : ICommand<TResponse>
-
-// Register query handler
-public void RegisterQueryHandler<TQuery, TResponse>(IQueryHandler<TQuery, TResponse> handler) 
-    where TQuery : IQuery<TResponse>
+var serviceProvider = services.BuildServiceProvider();
+serviceProvider.UseBrilliantMediator();
 ```
+
+### Auto-registration with Source Generator
+
+Add the `BrilliantMediator.SourceGenerator` package to your `.csproj`:
+
+```xml
+<PackageReference Include="BrilliantMediator.SourceGenerator"
+                  Version="3.0.0"
+                  OutputItemType="Analyzer"
+                  ReferenceOutputAssembly="false" />
+```
+
+The generator scans your assembly at **compile time** and generates an `AddGeneratedHandlers()` extension method. Use it in place of manual registrations:
+
+```csharp
+services
+    .AddBrilliantMediator()
+    .AddGeneratedHandlers()   // generated by BrilliantMediator.SourceGenerator
+    .Build();
+
+var serviceProvider = services.BuildServiceProvider();
+serviceProvider.UseBrilliantMediator();
+```
+
+To scan handlers from additional assemblies, add the attribute:
+
+```csharp
+[assembly: BrilliantMediatorGenerator(
+    Namespace = "MyApp.Infrastructure.Generated",
+    Assemblies = [typeof(MyCommandHandler), typeof(MyQueryHandler)])]
+```
+
+The current assembly is always scanned. `Assemblies` lets you include handlers from other referenced assemblies.
+
+### Service lifetimes
+
+```csharp
+services
+    .AddBrilliantMediator()
+    .AddCommandHandler<MyCommand, MyCommandHandler>(ServiceLifetime.Singleton)
+    .AddQueryHandler<MyQuery, MyResult, MyQueryHandler>(ServiceLifetime.Transient)
+    .Build();
+```
+
+Default lifetime is `Scoped`.
+
+## ASP.NET Core
+
+Works without any coupling to `IApplicationBuilder`. Call `UseBrilliantMediator()` on `app.Services`:
+
+```csharp
+var app = builder.Build();
+app.Services.UseBrilliantMediator();
+```
+
+## Why so fast?
+
+1. **No Reflection at runtime** — handler types are stored in a `ConcurrentDictionary` populated at startup
+2. **DI scope per call** — each dispatch creates a dedicated `IServiceScope`, ensuring proper scoped service lifetime (e.g., `DbContext`)
+3. **`ImmutableList` for events** — lock-free reads for parallel event dispatch
+4. **Compile-time type safety** — all generics resolved by the JIT, no dynamic dispatch
 
 ## Exception Handling
 
@@ -324,13 +309,51 @@ BrilliantMediator throws `HandlerNotRegisteredException` when a handler is not r
 ```csharp
 try
 {
-    await mediator.Send(new SomeCommand());
+    await mediator.DispatchAsync(new SomeCommand());
 }
 catch (HandlerNotRegisteredException ex)
 {
-    Console.WriteLine($"Error: {ex.Message}");
+    Console.WriteLine(ex.Message);
+    // "No handler registered for command 'SomeCommand'"
 }
 ```
+
+## API Reference
+
+### IMediator
+
+```csharp
+// Dispatch command without response
+Task DispatchAsync<TCommand>(TCommand command, CancellationToken cancellationToken = default)
+    where TCommand : ICommand;
+
+// Dispatch command with response
+Task<TResponse> DispatchAsync<TCommand, TResponse>(TCommand command, CancellationToken cancellationToken = default)
+    where TCommand : ICommand<TResponse>;
+
+// Send query
+Task<TResponse> SendAsync<TQuery, TResponse>(TQuery query, CancellationToken cancellationToken = default)
+    where TQuery : IQuery<TResponse>;
+
+// Publish event (parallel handlers)
+Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+    where TEvent : IEvent;
+```
+
+### IHandlerRegistry
+
+```csharp
+void RegisterCommandHandler<TCommand>() where TCommand : ICommand;
+void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TResponse>;
+void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
+void RegisterEventHandler<TEvent>() where TEvent : IEvent;
+```
+
+> **Note:** `IHandlerRegistry` is called internally by `UseBrilliantMediator()`. Application code should only depend on `IMediator`.
+
+## Supported .NET Versions
+
+- **.NET 10.0**
 
 ## Contributing
 
@@ -339,10 +362,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Author
-
-Created with ❤️ for developers who care about performance.
 
 ## Support
 
