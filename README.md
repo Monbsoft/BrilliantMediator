@@ -267,8 +267,12 @@ serviceProvider.UseBrilliantMediator();
 To scan handlers from additional assemblies, add the attribute:
 
 ```csharp
-[assembly: ScanHandlersFrom(typeof(SomeHandlerInAnotherAssembly))]
+[assembly: BrilliantMediatorGenerator(
+    Namespace = "MyApp.Infrastructure.Generated",
+    Assemblies = [typeof(MyCommandHandler), typeof(MyQueryHandler)])]
 ```
+
+The current assembly is always scanned. `Assemblies` lets you include handlers from other referenced assemblies.
 
 ### Service lifetimes
 

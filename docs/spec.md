@@ -103,7 +103,9 @@ Référencer dans le `.csproj` cible :
 
 Déclarer les assemblies supplémentaires à scanner :
 ```csharp
-[assembly: ScanHandlersFrom(typeof(CreateOrderCommandHandler))]
+[assembly: BrilliantMediatorGenerator(
+    Namespace = "MyApp.Infrastructure.Generated",
+    Assemblies = [typeof(CreateOrderCommandHandler)])]
 ```
 
 Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant `AddGeneratedHandlers(this MediatorBuilder)`.
@@ -158,7 +160,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 ### ADR-004 — Source Generator pour l'enregistrement zéro réflexion
 
 - **Contexte :** `AddHandlersFromAssembly()` utilise la réflexion au démarrage (`GetTypes()`, `MakeGenericMethod`), ce qui contredit la promesse "zéro réflexion" de la bibliothèque.
-- **Décision :** Créer `BrilliantMediator.SourceGenerator` (Roslyn `IIncrementalGenerator`) qui scanne les handlers à la compilation et génère `AddGeneratedHandlers(this MediatorBuilder)`. Les méthodes `AddHandlersFromAssembly*` sont marquées `[Obsolete]` avec message de migration vers v2.0.0. Configuration des assemblies supplémentaires via `[assembly: ScanHandlersFrom(typeof(T))]`.
+- **Décision :** Créer `BrilliantMediator.SourceGenerator` (Roslyn `IIncrementalGenerator`) qui scanne les handlers à la compilation et génère `AddGeneratedHandlers(this MediatorBuilder)`. Les méthodes `AddHandlersFromAssembly*` sont marquées `[Obsolete]` avec message de migration vers v2.0.0. Configuration des assemblies supplémentaires via `[assembly: BrilliantMediatorGenerator(Assemblies = [typeof(T)])]`.
 - **Conséquences :** Zéro réflexion à l'exécution y compris au démarrage. Erreurs de configuration détectées à la compilation. `AddHandlersFromAssembly*` restent fonctionnelles jusqu'à v2.0.0 pour la compatibilité.
 
 ### ADR-005 — SOLID refactoring v3.0.0
