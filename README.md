@@ -1,7 +1,7 @@
 # BrilliantMediator
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![.NET](https://img.shields.io/badge/.NET-10%2B-blue)
+![.NET](https://img.shields.io/badge/.NET-10.0-blue)
 ![NuGet](https://img.shields.io/badge/NuGet-BrilliantMediator-blue)
 ![Version](https://img.shields.io/badge/version-3.0.0-blue)
 
