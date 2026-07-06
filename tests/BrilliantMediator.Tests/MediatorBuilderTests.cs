@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Monbsoft.BrilliantMediator.Abstractions;
 using Monbsoft.BrilliantMediator.Abstractions.Commands;
+using Monbsoft.BrilliantMediator.Abstractions.Events;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Monbsoft.BrilliantMediator.Core;
 using Monbsoft.BrilliantMediator.Extensions;
@@ -36,6 +37,18 @@ public class BuilderTestQueryResult
 {
     public string Data { get; set; } = string.Empty;
     public int Count { get; set; }
+}
+
+public class BuilderTestEvent : IEvent
+{
+}
+
+public class BuilderTestEventHandler : IEventHandler<BuilderTestEvent>
+{
+    public Task Handle(BuilderTestEvent @event, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }
 
 public class BuilderTestCommandHandler : ICommandHandler<BuilderTestCommand>
@@ -174,6 +187,34 @@ public class MediatorBuilderExtensionTests
         var mediator = serviceProvider.GetService<IMediator>();
         Assert.Same(registry, mediator);
     }
+
+    [Fact]
+    public void UseBrilliantMediator_NullServiceProvider_ThrowsArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => BrilliantMediatorExtensions.UseBrilliantMediator(null!));
+
+        Assert.Equal("serviceProvider", exception.ParamName);
+    }
+
+    [Fact]
+    public void UseBrilliantMediator_WithoutBuild_ThrowsInvalidOperationException()
+    {
+        var services = new ServiceCollection();
+        services.AddBrilliantMediator(); // Build() intentionally not called
+        var serviceProvider = services.BuildServiceProvider();
+
+        // IMediatorInitializer is only registered by Build()
+        Assert.Throws<InvalidOperationException>(() => serviceProvider.UseBrilliantMediator());
+    }
+
+    [Fact]
+    public void Mediator_NullServiceProvider_ThrowsArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => new Mediator(null!));
+
+        Assert.Equal("serviceProvider", exception.ParamName);
+    }
 }
 
 // ============================================================================
@@ -225,6 +266,21 @@ public class MediatorBuilderHandlerRegistrationTests
         var handler = serviceProvider.GetService<IQueryHandler<BuilderTestQuery, BuilderTestQueryResult>>();
         Assert.NotNull(handler);
         Assert.IsType<BuilderTestQueryHandler>(handler);
+    }
+
+    [Fact]
+    public void AddEventHandler_RegistersHandlerInDI()
+    {
+        var services = new ServiceCollection();
+        var result = services
+            .AddBrilliantMediator()
+            .AddEventHandler<BuilderTestEvent, BuilderTestEventHandler>()
+            .Build();
+
+        var serviceProvider = result.BuildServiceProvider();
+        var handler = serviceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+        Assert.NotNull(handler);
+        Assert.IsType<BuilderTestEventHandler>(handler);
     }
 
     [Fact]
@@ -379,6 +435,77 @@ public class MediatorBuilderHandlerRegistrationTests
             {
                 var handler1 = scope1.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
                 var handler2 = scope2.ServiceProvider.GetService<ICommandHandler<BuilderTestCommand>>();
+
+                Assert.NotNull(handler1);
+                Assert.NotNull(handler2);
+                Assert.NotSame(handler1, handler2);
+            }
+        }
+
+        [Fact]
+        public void AddEventHandler_SingletonLifetime_ReturnsSameInstance()
+        {
+            var services = new ServiceCollection();
+            services
+                .AddBrilliantMediator()
+                .AddEventHandler<BuilderTestEvent, BuilderTestEventHandler>(ServiceLifetime.Singleton)
+                .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var handler1 = serviceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+            var handler2 = serviceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+
+            Assert.NotNull(handler1);
+            Assert.NotNull(handler2);
+            Assert.Same(handler1, handler2);
+        }
+
+        [Fact]
+        public void AddEventHandler_TransientLifetime_ReturnsDifferentInstance()
+        {
+            var services = new ServiceCollection();
+            services
+                .AddBrilliantMediator()
+                .AddEventHandler<BuilderTestEvent, BuilderTestEventHandler>(ServiceLifetime.Transient)
+                .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var handler1 = serviceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+            var handler2 = serviceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+
+            Assert.NotNull(handler1);
+            Assert.NotNull(handler2);
+            Assert.NotSame(handler1, handler2);
+        }
+
+        [Fact]
+        public void AddEventHandler_ScopedLifetime_ReturnsSameInstanceWithinScope()
+        {
+            var services = new ServiceCollection();
+            services
+                .AddBrilliantMediator()
+                .AddEventHandler<BuilderTestEvent, BuilderTestEventHandler>(ServiceLifetime.Scoped)
+                .Build();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            using (var scope = serviceProvider.CreateScope())
+            {
+                var handler1 = scope.ServiceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+                var handler2 = scope.ServiceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+
+                Assert.NotNull(handler1);
+                Assert.NotNull(handler2);
+                Assert.Same(handler1, handler2);
+            }
+
+            using (var scope1 = serviceProvider.CreateScope())
+            using (var scope2 = serviceProvider.CreateScope())
+            {
+                var handler1 = scope1.ServiceProvider.GetService<IEventHandler<BuilderTestEvent>>();
+                var handler2 = scope2.ServiceProvider.GetService<IEventHandler<BuilderTestEvent>>();
 
                 Assert.NotNull(handler1);
                 Assert.NotNull(handler2);

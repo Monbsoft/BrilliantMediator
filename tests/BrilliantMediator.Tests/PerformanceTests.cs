@@ -69,7 +69,8 @@ public class FastQueryHandler : IQueryHandler<PerfTestQuery, PerfTestQueryResult
 // PERFORMANCE BENCHMARK TESTS
 // ============================================================================
 
-public class PerformanceBenchmarkTests
+[Trait("Category", "Performance")]
+public class PerformanceBenchmarkTests : IAsyncLifetime
 {
     private readonly Mediator _mediator;
     private readonly TestServiceProvider _serviceProvider;
@@ -90,6 +91,22 @@ public class PerformanceBenchmarkTests
         _mediator.RegisterCommandHandler<PerfTestCommandWithResponse, PerfTestResult>();
         _mediator.RegisterQueryHandler<PerfTestQuery, PerfTestQueryResult>();
     }
+
+    // JIT warmup before any measurement to reduce flakiness
+    // of the sub-millisecond single-execution assertions.
+    public async Task InitializeAsync()
+    {
+        for (var i = 0; i < 300; i++)
+        {
+            await _mediator.DispatchAsync(new PerfTestCommand { Id = i });
+            await _mediator.DispatchAsync<PerfTestCommandWithResponse, PerfTestResult>(
+                new PerfTestCommandWithResponse { Value = i });
+            await _mediator.SendAsync<PerfTestQuery, PerfTestQueryResult>(
+                new PerfTestQuery { QueryId = i });
+        }
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
     public async Task Command_SingleExecution_HasMinimalOverhead()

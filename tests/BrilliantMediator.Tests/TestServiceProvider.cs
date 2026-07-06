@@ -44,7 +44,18 @@ public class TestServiceProvider : IServiceProvider, IServiceScopeFactory
 
     public void AddEventHandler<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
     {
-        _services[typeof(IEventHandler<TEvent>)] = handler;
+        // Multiple handlers per event are supported: handlers accumulate in a
+        // list exposed as IEnumerable<IEventHandler<TEvent>>, mirroring how
+        // Microsoft.Extensions.DependencyInjection resolves open collections.
+        var key = typeof(IEnumerable<IEventHandler<TEvent>>);
+        if (_services.TryGetValue(key, out var existing) && existing is List<IEventHandler<TEvent>> handlers)
+        {
+            handlers.Add(handler);
+        }
+        else
+        {
+            _services[key] = new List<IEventHandler<TEvent>> { handler };
+        }
     }
 
     public object? GetService(Type serviceType)

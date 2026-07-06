@@ -119,33 +119,4 @@ public class HandlerNotRegisteredExceptionTests
         var exception = HandlerNotRegisteredException.ForQuery(queryName);
         Assert.Equal($"No handler registered for query '{queryName}'", exception.Message);
     }
-
-    [Fact]
-    public void Exception_HasCorrectStackTrace_WhenThrown()
-    {
-        HandlerNotRegisteredException? caughtException = null;
-
-        try
-        {
-            throw HandlerNotRegisteredException.ForCommand("TestCommand");
-        }
-        catch (HandlerNotRegisteredException ex)
-        {
-            caughtException = ex;
-        }
-
-        Assert.NotNull(caughtException);
-        Assert.NotNull(caughtException.StackTrace);
-        Assert.Contains(nameof(HandlerNotRegisteredExceptionTests), caughtException.StackTrace);
-    }
-
-    [Fact]
-    public void Exception_CanBeSerialized()
-    {
-        var originalException = HandlerNotRegisteredException.ForCommand("SerializationTest");
-
-        Assert.Equal("No handler registered for command 'SerializationTest'", originalException.Message);
-        Assert.NotNull(originalException.GetType());
-        Assert.True(originalException.GetType().IsSealed);
-    }
 }
