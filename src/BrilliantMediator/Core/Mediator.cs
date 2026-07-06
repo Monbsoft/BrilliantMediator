@@ -5,7 +5,6 @@ using Monbsoft.BrilliantMediator.Abstractions.Events;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
 using Monbsoft.BrilliantMediator.Exceptions;
 using System.Collections.Concurrent;
-using System.Collections.Immutable;
 
 namespace Monbsoft.BrilliantMediator.Core;
 
@@ -18,7 +17,7 @@ public sealed class Mediator : IMediator, IHandlerRegistry
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, Type> _handlerTypeRegistry = new();
-    private readonly ConcurrentDictionary<string, ImmutableList<Type>> _eventHandlerTypeRegistry = new();
+    private readonly ConcurrentDictionary<string, bool> _eventRegistry = new();
 
     public Mediator(IServiceProvider serviceProvider)
     {
@@ -47,13 +46,11 @@ public sealed class Mediator : IMediator, IHandlerRegistry
 
     public void RegisterEventHandler<TEvent>() where TEvent : IEvent
     {
+        // Presence marker only: concrete handlers are resolved through DI
+        // as IEnumerable<IEventHandler<TEvent>>, which supports multiple
+        // handlers registered for the same event. Registration is idempotent.
         var key = $"event_{typeof(TEvent).FullName}";
-        var handlerType = typeof(IEventHandler<TEvent>);
-
-        _eventHandlerTypeRegistry.AddOrUpdate(
-            key,
-            _ => ImmutableList.Create(handlerType),
-            (_, existing) => existing.Contains(handlerType) ? existing : existing.Add(handlerType));
+        _eventRegistry.TryAdd(key, true);
     }
 
     #endregion
@@ -95,17 +92,10 @@ public sealed class Mediator : IMediator, IHandlerRegistry
     {
         var key = $"event_{typeof(TEvent).FullName}";
 
-        if (!_eventHandlerTypeRegistry.TryGetValue(key, out var handlerTypes) || handlerTypes.IsEmpty)
+        if (!_eventRegistry.ContainsKey(key))
             return Task.CompletedTask;
 
-        // ImmutableList is thread-safe for reads — no lock needed
-        var tasks = new Task[handlerTypes.Count];
-        for (var i = 0; i < handlerTypes.Count; i++)
-        {
-            tasks[i] = ExecuteEventHandlerAsync(handlerTypes[i], @event, cancellationToken);
-        }
-
-        return Task.WhenAll(tasks);
+        return PublishToAllHandlersAsync(@event, cancellationToken);
     }
 
     #endregion
@@ -140,11 +130,39 @@ public sealed class Mediator : IMediator, IHandlerRegistry
         return await execute(handler, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task ExecuteEventHandlerAsync<TEvent>(Type handlerType, TEvent @event, CancellationToken cancellationToken)
+    private async Task PublishToAllHandlersAsync<TEvent>(TEvent @event, CancellationToken cancellationToken)
         where TEvent : IEvent
     {
+        // ADR-002: each handler runs in its own DI scope. A dedicated counting
+        // scope determines how many handlers are registered before fanning out.
+        int handlerCount;
+        using (var countingScope = _serviceProvider.CreateScope())
+        {
+            handlerCount = countingScope.ServiceProvider
+                .GetService<IEnumerable<IEventHandler<TEvent>>>()?.Count() ?? 0;
+        }
+
+        if (handlerCount == 0)
+            throw HandlerNotRegisteredException.ForEvent(typeof(TEvent).Name);
+
+        var tasks = new Task[handlerCount];
+        for (var i = 0; i < handlerCount; i++)
+        {
+            tasks[i] = ExecuteEventHandlerAsync(i, @event, cancellationToken);
+        }
+
+        await Task.WhenAll(tasks).ConfigureAwait(false);
+    }
+
+    private async Task ExecuteEventHandlerAsync<TEvent>(int handlerIndex, TEvent @event, CancellationToken cancellationToken)
+        where TEvent : IEvent
+    {
+        // Index-based resolution assumes IEnumerable<T> ordering is stable across
+        // scopes: MS.DI resolves collections in registration order, but this is
+        // not guaranteed by the general IServiceProvider contract.
         using var scope = _serviceProvider.CreateScope();
-        var handler = scope.ServiceProvider.GetService(handlerType) as IEventHandler<TEvent>
+        var handler = scope.ServiceProvider
+            .GetService<IEnumerable<IEventHandler<TEvent>>>()?.ElementAtOrDefault(handlerIndex)
             ?? throw HandlerNotRegisteredException.ForEvent(typeof(TEvent).Name);
         await handler.Handle(@event, cancellationToken).ConfigureAwait(false);
     }

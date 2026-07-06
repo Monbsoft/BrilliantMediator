@@ -1,7 +1,7 @@
 # BrilliantMediator — Spec & Architecture
 
 > Source de vérité du projet. Mise à jour à la fin de chaque itération.
-> Dernière mise à jour : 2026-03-23 — itération #4 (Refactoring SOLID v3.0.0)
+> Dernière mise à jour : 2026-07-06 — correctif multi-handlers `PublishAsync` (ADR-006)
 
 ---
 
@@ -145,6 +145,8 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Décision :** Utiliser `ConcurrentDictionary<string, Type>` avec des clés générées statiquement à partir des noms complets de types. Résolution via DI standard sans `ActivatorUtilities`.
 - **Conséquences :** Overhead < 50 ns. Enregistrement explicite requis (ou via Source Generator). Pas de découverte automatique "magique".
 
+> **Nota (2026-07-06)** : cette décision reste valable pour les commands et queries. Pour les events, le registre est désormais un simple marqueur de présence (`ConcurrentDictionary<string, bool>`) — voir ADR-006.
+
 ### ADR-002 — Scope DI par appel dans DispatchAsync / SendAsync / PublishAsync
 
 - **Contexte :** Les handlers peuvent dépendre de services scoped (ex. `DbContext` EF Core). Un singleton partagé provoquerait des corruptions de données.
@@ -185,10 +187,17 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Décision :** Ajouter `CancellationToken cancellationToken = default` sur tous les handlers et méthodes dispatch.
 - **Conséquences :** Full async support. Graceful shutdown + timeout handling.
 
-**Thread safety improvements**
+**Thread safety improvements** — ⚠️ *Remplacée par ADR-006*
 - **Contexte :** Event handlers utilisaient `List<Type>` + `lock`, laissant le chemin critique bloqué.
 - **Décision :** Remplacer par `ImmutableList<Type>` (lock-free reads).
 - **Conséquences :** Better contention characteristics. Immutable snapshots.
+- **Statut :** Remplacée par ADR-006. L'`ImmutableList<Type>` dédupliquée ne stockait que le type d'interface `IEventHandler<TEvent>` : plusieurs enregistrements pour le même événement se réduisaient à une seule entrée, et `PublishAsync` n'exécutait qu'un seul handler. Le registre d'événements est désormais un marqueur de présence.
+
+### ADR-006 — Dispatch multi-handlers des événements via résolution IEnumerable et marqueur de présence
+
+- **Contexte :** `PublishAsync<TEvent>` n'exécutait qu'un seul handler quand plusieurs étaient enregistrés pour le même événement, contredisant ADR-002 (« chaque handler obtient son propre scope indépendant ») et la documentation XML d'`IEventHandler<TEvent>` (multi-handler supporté). Cause : le registre `ImmutableList<Type>` (ADR-005) ne connaissait que le type d'interface `IEventHandler<TEvent>` — `IHandlerRegistry.RegisterEventHandler<TEvent>()` ne reçoit jamais le type concret du handler — donc N enregistrements se dédupliquaient en une seule entrée et une seule résolution.
+- **Décision :** Le registre d'événements devient un simple marqueur de présence (`ConcurrentDictionary<string, bool>`, enregistrement idempotent). `PublishAsync<TEvent>` résout **tous** les handlers via `GetService<IEnumerable<IEventHandler<TEvent>>>()` (générique compile-time, zéro réflexion). Conformément à ADR-002, chaque handler s'exécute dans son propre scope DI : un « counting scope » dédié détermine le nombre N de handlers enregistrés, puis N scopes indépendants résolvent chacun l'énumérable et exécutent le handler d'index i. Exécution parallèle via `Task.WhenAll`.
+- **Conséquences :** Correctif conforme à ADR-002, sans aucun changement d'API publique (l'alternative — stocker les types concrets — exigeait un breaking change sur `IHandlerRegistry`, voir « Prochaine itération »). Trade-off assumé : MS.DI matérialise l'`IEnumerable<T>` complet à chaque résolution ⇒ N + N² instanciations de handlers scoped/transient par publish (les singletons ne sont pas réinstanciés) ; un handler dont le constructeur a un effet de bord le déclenche N+1 fois par publish. Correct mais coûteux si N grand. Hypothèse documentée : l'ordre de résolution d'`IEnumerable<T>` est stable entre scopes — garanti par MS.DI (ordre d'enregistrement), mais pas par le contrat général `IServiceProvider` ; un conteneur tiers ne respectant pas cet ordre pourrait exécuter un handler deux fois et en ignorer un autre.
 
 ---
 
@@ -209,5 +218,6 @@ Aucune dette structurelle identifiée après v3.0.0.
 **Candidates:**
 - v3.1.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`
 - Diagnostics dashboard (opt-in, external service)
+- `RegisterEventHandler<TEvent, THandler>()` — stocker les types concrets des event handlers pour ramener le coût du publish à N instanciations exactes (supprime le trade-off N + N² de l'ADR-006 et la dépendance à l'ordre de résolution MS.DI). Breaking change sur `IHandlerRegistry` — candidat v4.
 
 À valider lors de la prochaine session.
