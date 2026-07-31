@@ -1,7 +1,7 @@
 # BrilliantMediator — Spec & Architecture
 
 > Source de vérité du projet. Mise à jour à la fin de chaque itération.
-> Dernière mise à jour : 2026-07-06 — correctif multi-handlers `PublishAsync` (ADR-006)
+> Dernière mise à jour : 2026-07-31 — pipeline behaviors (ADR-007 → ADR-012)
 
 ---
 
@@ -198,6 +198,51 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Contexte :** `PublishAsync<TEvent>` n'exécutait qu'un seul handler quand plusieurs étaient enregistrés pour le même événement, contredisant ADR-002 (« chaque handler obtient son propre scope indépendant ») et la documentation XML d'`IEventHandler<TEvent>` (multi-handler supporté). Cause : le registre `ImmutableList<Type>` (ADR-005) ne connaissait que le type d'interface `IEventHandler<TEvent>` — `IHandlerRegistry.RegisterEventHandler<TEvent>()` ne reçoit jamais le type concret du handler — donc N enregistrements se dédupliquaient en une seule entrée et une seule résolution.
 - **Décision :** Le registre d'événements devient un simple marqueur de présence (`ConcurrentDictionary<string, bool>`, enregistrement idempotent). `PublishAsync<TEvent>` résout **tous** les handlers via `GetService<IEnumerable<IEventHandler<TEvent>>>()` (générique compile-time, zéro réflexion). Conformément à ADR-002, chaque handler s'exécute dans son propre scope DI : un « counting scope » dédié détermine le nombre N de handlers enregistrés, puis N scopes indépendants résolvent chacun l'énumérable et exécutent le handler d'index i. Exécution parallèle via `Task.WhenAll`.
 - **Conséquences :** Correctif conforme à ADR-002, sans aucun changement d'API publique (l'alternative — stocker les types concrets — exigeait un breaking change sur `IHandlerRegistry`, voir « Prochaine itération »). Trade-off assumé : MS.DI matérialise l'`IEnumerable<T>` complet à chaque résolution ⇒ N + N² instanciations de handlers scoped/transient par publish (les singletons ne sont pas réinstanciés) ; un handler dont le constructeur a un effet de bord le déclenche N+1 fois par publish. Correct mais coûteux si N grand. Hypothèse documentée : l'ordre de résolution d'`IEnumerable<T>` est stable entre scopes — garanti par MS.DI (ordre d'enregistrement), mais pas par le contrat général `IServiceProvider` ; un conteneur tiers ne respectant pas cet ordre pourrait exécuter un handler deux fois et en ignorer un autre.
+
+### ADR-007 — Commandes sans réponse : interface `IPipelineBehavior<TRequest>` séparée plutôt qu'un type `Unit` public
+
+- **Contexte :** `IPipelineBehavior<TRequest, TResponse>` couvre les queries et les commandes avec réponse. `ICommand` n'a pas de `TResponse` : sans arbitrage, `DispatchAsync<TCommand>` resterait le seul point d'entrée non interceptable — or journalisation, validation et transaction sont majoritairement demandées sur les commandes d'écriture, qui sont précisément celles sans réponse.
+- **Options considérées :**
+  1. **Type `Unit` public** (approche MediatR). Un seul jeu d'interfaces, mais : `ICommand` n'hérite pas de `ICommand<Unit>`, donc aucun behavior ne couvrirait réellement les deux formes sans changement d'API ; `Unit` devient un type public à maintenir *ad vitam* ; chaque handler de commande void devrait retourner `Task<Unit>` (allocation + bruit dans le code appelant).
+  2. **Interface séparée `IPipelineBehavior<TRequest>`** avec un délégué `RequestHandlerDelegate` non générique retournant `Task`.
+  3. **Aucun behavior sur les commandes sans réponse en v3.1.**
+- **Décision :** option 2. La bibliothèque duplique déjà systématiquement la distinction d'arité — `ICommand` / `ICommand<TResponse>`, `ICommandHandler<TCommand>` / `ICommandHandler<TCommand, TResponse>`. Introduire `IPipelineBehavior<TRequest>` prolonge un idiome existant au lieu d'introduire un concept nouveau. Aucun type sentinelle public, aucune allocation de `Task<Unit>`.
+- **Conséquences :** deux interfaces et deux délégués publics au lieu d'un. Un utilisateur voulant journaliser commandes *et* queries écrit deux classes — mais il devrait le faire aussi avec `Unit`, puisque `ICommand` n'est pas un `ICommand<Unit>`. Surface publique ajoutée : 2 interfaces + 2 délégués, aucun type porteur de données.
+
+### ADR-008 — Ordre d'exécution : ordre d'enregistrement, premier enregistré = plus externe
+
+- **Contexte :** un pipeline non déterministe est inexploitable — une politique de cache doit s'exécuter à l'intérieur de la journalisation mais à l'extérieur de la mesure, et l'utilisateur doit pouvoir le prédire à la lecture de sa configuration DI.
+- **Options considérées :** ordre d'enregistrement, ou propriété de priorité explicite (`int Order`).
+- **Décision :** ordre d'enregistrement dans `MediatorBuilder`, **le premier enregistré est le plus externe** (il voit la requête en premier et la réponse en dernier). `MediatorBuilder.AddPipelineBehavior` ajoute au `IServiceCollection` dans l'ordre d'appel ; `Mediator` résout `IEnumerable<IPipelineBehavior<TRequest, TResponse>>` et compose la chaîne en parcourant la liste **à l'envers**, de sorte que l'indice 0 enveloppe tous les autres.
+- **Conséquences :** ordre lisible sur place, sans coordination de numéros de priorité entre assemblies (une priorité explicite devient un problème de coordination global dès qu'un behavior vient d'un paquet tiers — YAGNI, cf. AGENTS.md). **Hypothèse documentée**, identique à celle assumée par ADR-006 : l'ordre de résolution d'`IEnumerable<T>` suit l'ordre d'enregistrement — garanti par `Microsoft.Extensions.DependencyInjection`, mais pas par le contrat général `IServiceProvider`. Un conteneur tiers ne respectant pas cet ordre produirait un pipeline dans un ordre non spécifié. Couvert par `PipelineBehaviorTests` (3 behaviors, ordre d'entrée et de sortie vérifiés).
+
+### ADR-009 — Court-circuit : conséquence du chaînage de délégués, garantie par test
+
+- **Contexte :** le cas d'usage moteur de l'itération (cache *stale-while-revalidate*) exige qu'un behavior puisse retourner une réponse **sans** exécuter le handler.
+- **Décision :** le pipeline est une chaîne de `RequestHandlerDelegate<TResponse>` ; l'appel du handler est la dernière fermeture de la chaîne. Un behavior qui ne l'appelle pas retourne sa propre valeur — le handler n'est jamais invoqué. Aucun mécanisme dédié n'est ajouté. Le handler reste résolu depuis le conteneur avant la construction de la chaîne (il est capturé par la fermeture terminale), mais il n'est pas *exécuté*.
+- **Conséquences :** court-circuit gratuit et sans API supplémentaire. Contrepartie assumée : le handler est **instancié** même s'il n'est pas exécuté, car sa résolution DI conditionne l'échec `HandlerNotRegisteredException` — un dispatch vers un handler non enregistré doit lever, que des behaviors soient présents ou non. Un handler dont le constructeur a un effet de bord le déclenchera donc même court-circuité. Vérifié par `SendAsync_BehaviorDoesNotCallNext_HandlerIsNotExecuted`.
+
+### ADR-010 — Behaviors ouverts : fermetures explicites en v3.1, génération reportée
+
+- **Contexte :** le besoin le plus fréquent est un behavior transverse unique (`LoggingBehavior<TRequest, TResponse>`) appliqué à toutes les requêtes. La forme idiomatique MS.DI est `services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>))`.
+- **Point dur :** l'enregistrement d'un générique **ouvert** dans MS.DI construit le type fermé **à la résolution**, via `Type.MakeGenericType` — c'est de la réflexion dans le chemin critique, incompatible avec ADR-001 et non prouvable sous trimming/NativeAOT. Le contourner en silence reviendrait à annuler l'argument de vente du paquet.
+- **Décision :** l'enregistrement de génériques ouverts n'est **pas** exposé en v3.1. La classe de behavior peut rester générique — seul l'*enregistrement* doit être fermé : `AddPipelineBehavior<GetUserQuery, UserDto, LoggingBehavior<GetUserQuery, UserDto>>()`. Le type fermé est construit par le **compilateur**, pas par le conteneur : zéro réflexion, AOT-safe. La génération automatique de ces fermetures par `BrilliantMediator.SourceGenerator` — qui connaît déjà tous les couples `(TRequest, TResponse)` puisqu'il scanne les handlers — est reportée à une itération dédiée.
+- **Conséquences :** une ligne d'enregistrement par couple `(requête, réponse)` au lieu d'une seule pour tout le projet — verbeux à grande échelle, cohérent avec la verbosité déjà assumée par ADR-003. Le besoin est **couvert fonctionnellement** dès v3.1, seul le confort d'écriture manque. Vérifié par `SendAsync_OpenGenericBehaviorClosedAtRegistration_IsExecuted`. Reporté explicitement : l'itération « source generator » devra trancher l'ordre relatif entre behaviors générés et behaviors enregistrés à la main (ADR-008), question non résolue ici.
+
+### ADR-011 — Événements : hors périmètre
+
+- **Contexte :** `PublishAsync<TEvent>` diffuse à N handlers exécutés **en parallèle**, chacun dans son propre scope (ADR-002/ADR-006), et ne produit aucune réponse.
+- **Décision :** aucun behavior sur les événements en v3.1.
+- **Justification :** le modèle « chaîne de responsabilité autour d'un appel unique » ne se transpose pas. Deux sémantiques distinctes seraient nécessaires — envelopper le *publish* entier, ou envelopper *chaque handler* — et elles ne sont pas interchangeables (retry, transaction et court-circuit signifient autre chose dans chacune). Sans `TResponse`, `RequestHandlerDelegate<TResponse>` ne s'applique pas ; le court-circuit d'ADR-009 n'a pas de valeur de retour à produire. Aucun cas d'usage n'a été exprimé, contrairement au cache sur les lectures.
+- **Conséquences :** `PublishAsync` conserve exactement son comportement actuel, sans branche supplémentaire ni surcoût. Le besoin transverse sur événements reste couvert par la composition manuelle dans les handlers. Réversible : la décision n'engage aucune API.
+
+### ADR-012 — Coût nul en l'absence de behavior : double garde avant toute résolution
+
+- **Contexte :** contrainte non négociable de l'itération — le code existant sans behavior doit se comporter à l'identique, sans surcoût mesurable. Résoudre `IEnumerable<IPipelineBehavior<TRequest, TResponse>>` à chaque dispatch coûterait une résolution DI et une allocation par appel, même quand aucun behavior n'est enregistré.
+- **Décision :** deux gardes successives dans `Mediator`, avant toute allocation liée au pipeline.
+  1. `private volatile bool _hasPipelineBehaviors` — passé à `true` au premier `RegisterPipelineBehavior*`. Faux dans toute application n'utilisant pas la fonctionnalité : lecture d'un champ booléen, le chemin d'exécution est alors **identique octet pour octet** au chemin v3.0.
+  2. Si des behaviors existent quelque part, la clé `behavior_*` est construite et cherchée dans un `ConcurrentDictionary<string, bool>` dédié — une requête sans behavior ne déclenche aucune résolution DI. La construction de la clé (interpolation de chaîne) n'a lieu **que** derrière la première garde.
+- **Conséquences :** surcoût d'une lecture de champ volatile sur le chemin sans behavior. Mesuré : `alloc/op` inchangée à 512 B (métrique déterministe), latence dans le bruit de mesure — voir « Preuve mesurée » ci-dessous. Contrepartie : deux registres à maintenir en cohérence dans `Mediator`. Effet de bord bénéfique : le passage de la requête en paramètre explicite (au lieu de la capturer dans une fermeture) a permis de rendre `static` les lambdas d'invocation du handler.
 
 ---
 
