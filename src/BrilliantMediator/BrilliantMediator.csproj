@@ -10,13 +10,13 @@
 	  <PackageId>BrilliantMediator</PackageId>
 	  <Title>BrilliantMediator</Title>
 	  <Description>Ultra-lightweight, zero-reflection mediator for .NET with blazing performance</Description>
-	  <Version>3.0.0</Version>
+	  <Version>3.1.0</Version>
 	  <Authors>Monbsoft</Authors>
 	  <PackageProjectUrl>https://github.com/Monbsoft/BrilliantMediator</PackageProjectUrl>
 	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
 	  <RepositoryUrl>https://github.com/Monbsoft/BrilliantMediator</RepositoryUrl>
 	  <RepositoryType>git</RepositoryType>
-	  <PackageTags>mediator;cqrs;command;query;performance</PackageTags>
+	  <PackageTags>mediator;cqrs;command;query;performance;pipeline;behavior</PackageTags>
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

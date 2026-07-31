@@ -41,4 +41,21 @@ public interface IHandlerRegistry
     /// <typeparam name="TEvent">The event type.</typeparam>
     void RegisterEventHandler<TEvent>()
         where TEvent : IEvent;
+
+    /// <summary>
+    /// Marks a request/response pair as having at least one pipeline behavior.
+    /// The behaviors themselves are resolved from DI at dispatch time; this
+    /// registration only lets the mediator skip pipeline resolution entirely
+    /// for requests that have none (ADR-012). Registration is idempotent.
+    /// </summary>
+    /// <typeparam name="TRequest">The request type.</typeparam>
+    /// <typeparam name="TResponse">The response type.</typeparam>
+    void RegisterPipelineBehavior<TRequest, TResponse>();
+
+    /// <summary>
+    /// Marks a command without response as having at least one pipeline behavior.
+    /// Registration is idempotent.
+    /// </summary>
+    /// <typeparam name="TRequest">The command type.</typeparam>
+    void RegisterPipelineBehavior<TRequest>();
 }
