@@ -108,6 +108,7 @@ public sealed class MediatorBuilder
     /// <param name="lifetime">The DI lifetime of the behavior. Scoped by default.</param>
     /// <returns>The same builder, for chaining.</returns>
     public MediatorBuilder AddPipelineBehavior<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        where TRequest : ICommand
         where TBehavior : class, IPipelineBehavior<TRequest>
     {
         _services.Add(new ServiceDescriptor(typeof(IPipelineBehavior<TRequest>), typeof(TBehavior), lifetime));

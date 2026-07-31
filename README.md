@@ -488,7 +488,7 @@ void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TRe
 void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
 void RegisterEventHandler<TEvent>() where TEvent : IEvent;
 void RegisterPipelineBehavior<TRequest, TResponse>();
-void RegisterPipelineBehavior<TRequest>();
+void RegisterPipelineBehavior<TRequest>() where TRequest : ICommand;
 ```
 
 > **Note:** `IHandlerRegistry` is called internally by `UseBrilliantMediator()`. Application code should only depend on `IMediator`.

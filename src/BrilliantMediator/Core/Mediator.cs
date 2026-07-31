@@ -79,7 +79,7 @@ public sealed class Mediator : IMediator, IHandlerRegistry
     }
 
     /// <inheritdoc />
-    public void RegisterPipelineBehavior<TRequest>()
+    public void RegisterPipelineBehavior<TRequest>() where TRequest : ICommand
     {
         _behaviorRegistry.TryAdd(BehaviorKey<TRequest>(), true);
         _hasPipelineBehaviors = true;
@@ -148,7 +148,9 @@ public sealed class Mediator : IMediator, IHandlerRegistry
         TRequest request,
         Func<HandlerNotRegisteredException> exceptionFactory,
         Func<THandler, TRequest, CancellationToken, Task> execute,
-        CancellationToken cancellationToken) where THandler : class
+        CancellationToken cancellationToken)
+        where TRequest : ICommand
+        where THandler : class
     {
         if (!_handlerTypeRegistry.TryGetValue(key, out var handlerType))
             throw exceptionFactory();
@@ -192,7 +194,9 @@ public sealed class Mediator : IMediator, IHandlerRegistry
         THandler handler,
         TRequest request,
         Func<THandler, TRequest, CancellationToken, Task> execute,
-        CancellationToken cancellationToken) where THandler : class
+        CancellationToken cancellationToken)
+        where TRequest : ICommand
+        where THandler : class
     {
         // ADR-012: second guard. Behaviors exist somewhere, but maybe not for
         // this request — no DI resolution in that case.

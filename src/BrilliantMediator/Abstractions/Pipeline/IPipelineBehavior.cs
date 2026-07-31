@@ -1,3 +1,5 @@
+using Monbsoft.BrilliantMediator.Abstractions.Commands;
+
 namespace Monbsoft.BrilliantMediator.Abstractions.Pipeline;
 
 /// <summary>
@@ -36,8 +38,16 @@ public interface IPipelineBehavior<in TRequest, TResponse>
 /// A separate interface is used instead of a public <c>Unit</c> sentinel type,
 /// mirroring the arity split already applied to <c>ICommand</c> and
 /// <c>ICommandHandler</c> (ADR-007).
+/// <para>
+/// <typeparamref name="TRequest"/> is constrained to <see cref="ICommand"/>: this
+/// pipeline is only ever resolved from <c>DispatchAsync&lt;TCommand&gt;</c>. Since
+/// <c>ICommand&lt;TResponse&gt;</c> does not derive from <see cref="ICommand"/>,
+/// without the constraint a behavior targeting a command *with* response would
+/// compile here and then never be invoked (ADR-013).
+/// </para>
 /// </remarks>
 public interface IPipelineBehavior<in TRequest>
+    where TRequest : ICommand
 {
     /// <summary>
     /// Handles the command, optionally invoking the rest of the pipeline.
