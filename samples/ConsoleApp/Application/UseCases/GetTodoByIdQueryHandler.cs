@@ -18,7 +18,7 @@ public class GetTodoByIdQueryHandler : IQueryHandler<GetTodoByIdQuery, TodoDto>
     {
         var todo = await _repository.GetByIdAsync(query.TodoId);
         if (todo == null)
-            return null;
+            throw new KeyNotFoundException($"No todo found with id {query.TodoId}");
 
         return new TodoDto
         {

@@ -10,7 +10,7 @@ public interface ITodoRepository
 
     Task DeleteAsync(int id);
 
-    Task<Todo> GetByIdAsync(int id);
+    Task<Todo?> GetByIdAsync(int id);
 
     Task<List<Todo>> GetAllAsync();
 

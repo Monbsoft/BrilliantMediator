@@ -23,7 +23,12 @@ public class OrderItem
     public decimal Price { get; private set; }
     public decimal Total => Price * Quantity;
 
- private OrderItem() { }
+    private OrderItem()
+    {
+        // Overwritten by Create; keeps the non-nullable properties initialized.
+        ProductId = string.Empty;
+        ProductName = string.Empty;
+    }
 
     /// <summary>
     /// Factory method pour créer un nouvel item de commande

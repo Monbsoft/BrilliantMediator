@@ -32,7 +32,7 @@ var provider = services.BuildServiceProvider();
 provider.UseBrilliantMediator();
 var mediator = provider.GetRequiredService<IMediator>();
 
-var todoService = provider.GetService<TodoService>();
+var todoService = provider.GetRequiredService<TodoService>();
 
 // Demo
 try

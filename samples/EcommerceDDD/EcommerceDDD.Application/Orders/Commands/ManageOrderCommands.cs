@@ -16,7 +16,7 @@ public class ConfirmOrderCommand : ICommand
 public class ShipOrderCommand : ICommand
 {
     public Guid OrderId { get; set; }
-    public string TrackingNumber { get; set; }
+    public string TrackingNumber { get; set; } = string.Empty;
 }
 
 /// <summary>

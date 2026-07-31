@@ -16,6 +16,10 @@ public sealed class MediatorBuilder
     private readonly IServiceCollection _services;
     private readonly List<Action<IHandlerRegistry>> _handlerRegistrations = new();
 
+    /// <summary>
+    /// Creates a builder registering handlers and behaviors into the given collection.
+    /// </summary>
+    /// <param name="services">The service collection to populate.</param>
     public MediatorBuilder(IServiceCollection services)
     {
         _services = services;

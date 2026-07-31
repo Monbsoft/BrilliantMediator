@@ -16,5 +16,5 @@ public class PlaceOrderResult
 {
     public Guid OrderId { get; set; }
     public decimal TotalAmount { get; set; }
-    public string Status { get; set; }
+    public string Status { get; set; } = string.Empty;
 }
