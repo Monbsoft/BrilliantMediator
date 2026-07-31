@@ -4,6 +4,7 @@ using Monbsoft.BrilliantMediator.Abstractions.Commands;
 using Monbsoft.BrilliantMediator.Abstractions.Events;
 using Monbsoft.BrilliantMediator.Abstractions.Pipeline;
 using Monbsoft.BrilliantMediator.Abstractions.Queries;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Monbsoft.BrilliantMediator.Extensions;
 
@@ -28,7 +29,7 @@ public sealed class MediatorBuilder
     /// <summary>
     /// Registers a command handler without response.
     /// </summary>
-    public MediatorBuilder AddCommandHandler<TCommand, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    public MediatorBuilder AddCommandHandler<TCommand, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TCommand : ICommand
         where THandler : class, ICommandHandler<TCommand>
     {
@@ -40,7 +41,7 @@ public sealed class MediatorBuilder
     /// <summary>
     /// Registers a command handler with response.
     /// </summary>
-    public MediatorBuilder AddCommandHandler<TCommand, TResponse, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    public MediatorBuilder AddCommandHandler<TCommand, TResponse, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TCommand : ICommand<TResponse>
         where THandler : class, ICommandHandler<TCommand, TResponse>
     {
@@ -52,7 +53,7 @@ public sealed class MediatorBuilder
     /// <summary>
     /// Registers a query handler.
     /// </summary>
-    public MediatorBuilder AddQueryHandler<TQuery, TResponse, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    public MediatorBuilder AddQueryHandler<TQuery, TResponse, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TQuery : IQuery<TResponse>
         where THandler : class, IQueryHandler<TQuery, TResponse>
     {
@@ -65,7 +66,7 @@ public sealed class MediatorBuilder
     /// Registers an event handler.
     /// Multiple handlers can be registered for the same event.
     /// </summary>
-    public MediatorBuilder AddEventHandler<TEvent, THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    public MediatorBuilder AddEventHandler<TEvent, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TEvent : IEvent
         where THandler : class, IEventHandler<TEvent>
     {
@@ -89,7 +90,7 @@ public sealed class MediatorBuilder
     /// <c>LoggingBehavior&lt;GetUserQuery, UserDto&gt;</c>: the closure is built
     /// by the compiler, so resolution stays reflection-free (ADR-010).
     /// </remarks>
-    public MediatorBuilder AddPipelineBehavior<TRequest, TResponse, TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    public MediatorBuilder AddPipelineBehavior<TRequest, TResponse, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TBehavior : class, IPipelineBehavior<TRequest, TResponse>
     {
         _services.Add(new ServiceDescriptor(typeof(IPipelineBehavior<TRequest, TResponse>), typeof(TBehavior), lifetime));
@@ -106,7 +107,7 @@ public sealed class MediatorBuilder
     /// <typeparam name="TBehavior">The behavior implementation.</typeparam>
     /// <param name="lifetime">The DI lifetime of the behavior. Scoped by default.</param>
     /// <returns>The same builder, for chaining.</returns>
-    public MediatorBuilder AddPipelineBehavior<TRequest, TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
+    public MediatorBuilder AddPipelineBehavior<TRequest, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TBehavior : class, IPipelineBehavior<TRequest>
     {
         _services.Add(new ServiceDescriptor(typeof(IPipelineBehavior<TRequest>), typeof(TBehavior), lifetime));
