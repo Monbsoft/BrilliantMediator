@@ -24,7 +24,7 @@ services
     .AddCommandHandler<CompleteTodoCommand, CompleteTodoResult, CompleteTodoCommandHandler>()
     .AddCommandHandler<DeleteTodoCommand, DeleteTodoCommandHandler>()
     .AddQueryHandler<GetAllTodosQuery, GetAllTodosResult, GetAllTodosQueryHandler>()
-    .AddQueryHandler<GetTodoByIdQuery, TodoDto, GetTodoByIdQueryHandler>()
+    .AddQueryHandler<GetTodoByIdQuery, TodoDto?, GetTodoByIdQueryHandler>()
     .AddQueryHandler<GetTodoStatsQuery, TodoStats, GetTodoStatsQueryHandler>()
     .Build();
 
