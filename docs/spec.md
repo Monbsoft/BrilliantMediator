@@ -42,8 +42,8 @@ void RegisterCommandHandler<TCommand>() where TCommand : ICommand;
 void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TResponse>;
 void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
 void RegisterEventHandler<TEvent>() where TEvent : IEvent;
-void RegisterPipelineBehavior<TRequest, TResponse>();   // v3.1.0
-void RegisterPipelineBehavior<TRequest>();              // v3.1.0
+void RegisterPipelineBehavior<TRequest, TResponse>();   // v3.2.0
+void RegisterPipelineBehavior<TRequest>();              // v3.2.0
 ```
 
 **Nota bene:**
@@ -94,7 +94,7 @@ await mediator.DispatchAsync(command, cancellationToken);
 
 **Works everywhere:** Console app, Worker Service, ASP.NET Core, etc. (no coupling to IApplicationBuilder)
 
-### Pipeline behaviors — v3.1.0 (additif)
+### Pipeline behaviors — v3.2.0 (additif)
 
 ```csharp
 namespace Monbsoft.BrilliantMediator.Abstractions.Pipeline;
@@ -141,10 +141,10 @@ est la même instance sur toute la chaîne.
 **Impact SemVer :** ajout de deux membres à `IHandlerRegistry`. Rupture de compilation pour un
 implémenteur tiers de cette interface — mais `IHandlerRegistry` est un point d'extension interne
 (sa propre documentation XML précise que le code applicatif doit dépendre d'`IMediator`), et
-`Mediator` en est la seule implémentation. Traité comme un ajout mineur : **v3.1.0**.
+`Mediator` en est la seule implémentation. Traité comme un ajout mineur : **v3.2.0**.
 Aucun changement pour les consommateurs d'`IMediator`.
 
-### Source Generator — BrilliantMediator.SourceGenerator v3.0.0
+### Source Generator — BrilliantMediator.SourceGenerator v3.2.0
 
 Référencer dans le `.csproj` cible :
 ```xml
@@ -175,7 +175,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 | 1.2.0 | Migration .NET 10 | 2026-03-20 |
 | 1.3.0 | BrilliantMediator.SourceGenerator — enregistrement zéro réflexion à la compilation | 2026-03-20 |
 | 3.0.0 | SOLID refactoring: ISP split (IMediator/IHandlerRegistry), CancellationToken, decouple ASP.NET | 2026-03-23 |
-| 3.1.0 | Pipeline behaviors sur commandes et queries (ADR-007 → ADR-012) | 2026-07-31 |
+| 3.2.0 | Pipeline behaviors sur commandes et queries (ADR-007 → ADR-012) | 2026-07-31 |
 
 ---
 
@@ -259,7 +259,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Options considérées :**
   1. **Type `Unit` public** (approche MediatR). Un seul jeu d'interfaces, mais : `ICommand` n'hérite pas de `ICommand<Unit>`, donc aucun behavior ne couvrirait réellement les deux formes sans changement d'API ; `Unit` devient un type public à maintenir *ad vitam* ; chaque handler de commande void devrait retourner `Task<Unit>` (allocation + bruit dans le code appelant).
   2. **Interface séparée `IPipelineBehavior<TRequest>`** avec un délégué `RequestHandlerDelegate` non générique retournant `Task`.
-  3. **Aucun behavior sur les commandes sans réponse en v3.1.**
+  3. **Aucun behavior sur les commandes sans réponse en v3.2.**
 - **Décision :** option 2. La bibliothèque duplique déjà systématiquement la distinction d'arité — `ICommand` / `ICommand<TResponse>`, `ICommandHandler<TCommand>` / `ICommandHandler<TCommand, TResponse>`. Introduire `IPipelineBehavior<TRequest>` prolonge un idiome existant au lieu d'introduire un concept nouveau. Aucun type sentinelle public, aucune allocation de `Task<Unit>`.
 - **Conséquences :** deux interfaces et deux délégués publics au lieu d'un. Un utilisateur voulant journaliser commandes *et* queries écrit deux classes — mais il devrait le faire aussi avec `Unit`, puisque `ICommand` n'est pas un `ICommand<Unit>`. Surface publique ajoutée : 2 interfaces + 2 délégués, aucun type porteur de données.
 
@@ -276,18 +276,18 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Décision :** le pipeline est une chaîne de `RequestHandlerDelegate<TResponse>` ; l'appel du handler est la dernière fermeture de la chaîne. Un behavior qui ne l'appelle pas retourne sa propre valeur — le handler n'est jamais invoqué. Aucun mécanisme dédié n'est ajouté. Le handler reste résolu depuis le conteneur avant la construction de la chaîne (il est capturé par la fermeture terminale), mais il n'est pas *exécuté*.
 - **Conséquences :** court-circuit gratuit et sans API supplémentaire. Contrepartie assumée : le handler est **instancié** même s'il n'est pas exécuté, car sa résolution DI conditionne l'échec `HandlerNotRegisteredException` — un dispatch vers un handler non enregistré doit lever, que des behaviors soient présents ou non. Un handler dont le constructeur a un effet de bord le déclenchera donc même court-circuité. Vérifié par `SendAsync_BehaviorDoesNotCallNext_HandlerIsNotExecuted`.
 
-### ADR-010 — Behaviors ouverts : fermetures explicites en v3.1, génération reportée
+### ADR-010 — Behaviors ouverts : fermetures explicites en v3.2, génération reportée
 
 - **Contexte :** le besoin le plus fréquent est un behavior transverse unique (`LoggingBehavior<TRequest, TResponse>`) appliqué à toutes les requêtes. La forme idiomatique MS.DI est `services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>))`.
 - **Point dur :** l'enregistrement d'un générique **ouvert** dans MS.DI construit le type fermé **à la résolution**, via `Type.MakeGenericType` — c'est de la réflexion dans le chemin critique, incompatible avec ADR-001 et non prouvable sous trimming/NativeAOT. Le contourner en silence reviendrait à annuler l'argument de vente du paquet.
-- **Décision :** l'enregistrement de génériques ouverts n'est **pas** exposé en v3.1. La classe de behavior peut rester générique — seul l'*enregistrement* doit être fermé : `AddPipelineBehavior<GetUserQuery, UserDto, LoggingBehavior<GetUserQuery, UserDto>>()`. Le type fermé est construit par le **compilateur**, pas par le conteneur : zéro réflexion, AOT-safe. La génération automatique de ces fermetures par `BrilliantMediator.SourceGenerator` — qui connaît déjà tous les couples `(TRequest, TResponse)` puisqu'il scanne les handlers — est reportée à une itération dédiée.
+- **Décision :** l'enregistrement de génériques ouverts n'est **pas** exposé en v3.2. La classe de behavior peut rester générique — seul l'*enregistrement* doit être fermé : `AddPipelineBehavior<GetUserQuery, UserDto, LoggingBehavior<GetUserQuery, UserDto>>()`. Le type fermé est construit par le **compilateur**, pas par le conteneur : zéro réflexion, AOT-safe. La génération automatique de ces fermetures par `BrilliantMediator.SourceGenerator` — qui connaît déjà tous les couples `(TRequest, TResponse)` puisqu'il scanne les handlers — est reportée à une itération dédiée.
 - **Vérification :** `<IsAotCompatible>true</IsAotCompatible>` a été activé sur `BrilliantMediator.csproj`, ce qui allume les analyseurs trimming/AOT du SDK. La compatibilité AOT n'est donc plus une affirmation mais une propriété **vérifiée par le compilateur** à chaque build. Le premier passage a révélé six `IL2087` — `new ServiceDescriptor(Type, Type, lifetime)` exige que le trimmer préserve le constructeur du type d'implémentation : quatre sur les méthodes préexistantes (`AddCommandHandler` ×2, `AddQueryHandler`, `AddEventHandler`) et deux sur les nouvelles `AddPipelineBehavior`. Corrigé en annotant les paramètres génériques d'implémentation avec `[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]`. Le paquet n'était donc pas réellement trim-safe avant cette itération, malgré la promesse.
-- **Conséquences :** une ligne d'enregistrement par couple `(requête, réponse)` au lieu d'une seule pour tout le projet — verbeux à grande échelle, cohérent avec la verbosité déjà assumée par ADR-003. Le besoin est **couvert fonctionnellement** dès v3.1, seul le confort d'écriture manque. Vérifié par `SendAsync_OpenGenericBehaviorClosedAtRegistration_IsExecuted`. Reporté explicitement : l'itération « source generator » devra trancher l'ordre relatif entre behaviors générés et behaviors enregistrés à la main (ADR-008), question non résolue ici.
+- **Conséquences :** une ligne d'enregistrement par couple `(requête, réponse)` au lieu d'une seule pour tout le projet — verbeux à grande échelle, cohérent avec la verbosité déjà assumée par ADR-003. Le besoin est **couvert fonctionnellement** dès v3.2, seul le confort d'écriture manque. Vérifié par `SendAsync_OpenGenericBehaviorClosedAtRegistration_IsExecuted`. Reporté explicitement : l'itération « source generator » devra trancher l'ordre relatif entre behaviors générés et behaviors enregistrés à la main (ADR-008), question non résolue ici.
 
 ### ADR-011 — Événements : hors périmètre
 
 - **Contexte :** `PublishAsync<TEvent>` diffuse à N handlers exécutés **en parallèle**, chacun dans son propre scope (ADR-002/ADR-006), et ne produit aucune réponse.
-- **Décision :** aucun behavior sur les événements en v3.1.
+- **Décision :** aucun behavior sur les événements en v3.2.
 - **Justification :** le modèle « chaîne de responsabilité autour d'un appel unique » ne se transpose pas. Deux sémantiques distinctes seraient nécessaires — envelopper le *publish* entier, ou envelopper *chaque handler* — et elles ne sont pas interchangeables (retry, transaction et court-circuit signifient autre chose dans chacune). Sans `TResponse`, `RequestHandlerDelegate<TResponse>` ne s'applique pas ; le court-circuit d'ADR-009 n'a pas de valeur de retour à produire. Aucun cas d'usage n'a été exprimé, contrairement au cache sur les lectures.
 - **Conséquences :** `PublishAsync` conserve exactement son comportement actuel, sans branche supplémentaire ni surcoût. Le besoin transverse sur événements reste couvert par la composition manuelle dans les handlers. Réversible : la décision n'engage aucune API.
 
@@ -311,7 +311,7 @@ que la médiane sur une machine de développement. Les deux versions sont compil
 (`git worktree` sur `dev` pour la référence) et exécutées **en alternance**, trois paires
 successives, afin d'annuler la dérive thermique et l'ordonnancement de la machine.
 
-| Mesure | v3.0.0 (`dev`) | v3.1.0 (behaviors) | Écart |
+| Mesure | v3.0.0 (`dev`) | v3.2.0 (behaviors) | Écart |
 |---|---|---|---|
 | `DispatchAsync<TCommand>` | 183,5 ns/op | **157,9 ns/op** | −14 % |
 | `SendAsync<TQuery, TResponse>` | 236,6 ns/op | **211,5 ns/op** | −11 % |
@@ -339,7 +339,7 @@ Aucune dette structurelle identifiée après v3.0.0.
 **Abandonné intentionnellement:**
 - `MediatorOptions`, `MediatorDiagnosticEvent`, `MediatorEventType` — diagnostics sans cas d'usage clair
 - ~~Middlewares — ajouteraient de la complexité sans bénéfice clair pour la majorité~~ — décision
-  révisée en v3.1.0 : un consommateur réel (application MAUI hors-ligne appliquant une politique de
+  révisée en v3.2.0 : un consommateur réel (application MAUI hors-ligne appliquant une politique de
   cache *stale-while-revalidate* à toutes ses lectures) a dû se replier sur un décorateur DI écrit à
   la main faute de point d'interception. Voir ADR-007 → ADR-012.
 - Instance registration methods — nécessitaient DI lookup, ajoutaient de la confusion
@@ -354,8 +354,8 @@ Aucune dette structurelle identifiée après v3.0.0.
   fermetures concrètes d'un behavior générique (`LoggingBehavior<TRequest, TResponse>`) sur tous les
   couples `(TRequest, TResponse)` qu'il découvre déjà en scannant les handlers. Supprime la
   verbosité assumée par ADR-010 sans introduire de réflexion. **À trancher :** l'ordre relatif entre
-  behaviors générés et behaviors enregistrés à la main (ADR-008), non résolu en v3.1.0.
-- ~~v3.1.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`~~ —
+  behaviors générés et behaviors enregistrés à la main (ADR-008), non résolu en v3.2.0.
+- ~~v3.2.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`~~ —
   couvert par les pipeline behaviors : un `ValidationBehavior` court-circuite ou lève avant le handler.
 - Diagnostics dashboard (opt-in, external service)
 - `RegisterEventHandler<TEvent, THandler>()` — stocker les types concrets des event handlers pour ramener le coût du publish à N instanciations exactes (supprime le trade-off N + N² de l'ADR-006 et la dépendance à l'ordre de résolution MS.DI). Breaking change sur `IHandlerRegistry` — candidat v4.
