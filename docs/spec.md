@@ -42,6 +42,8 @@ void RegisterCommandHandler<TCommand>() where TCommand : ICommand;
 void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TResponse>;
 void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
 void RegisterEventHandler<TEvent>() where TEvent : IEvent;
+void RegisterPipelineBehavior<TRequest, TResponse>();   // v3.1.0
+void RegisterPipelineBehavior<TRequest>();              // v3.1.0
 ```
 
 **Nota bene:**
@@ -92,6 +94,56 @@ await mediator.DispatchAsync(command, cancellationToken);
 
 **Works everywhere:** Console app, Worker Service, ASP.NET Core, etc. (no coupling to IApplicationBuilder)
 
+### Pipeline behaviors — v3.1.0 (additif)
+
+```csharp
+namespace Monbsoft.BrilliantMediator.Abstractions.Pipeline;
+
+public delegate Task<TResponse> RequestHandlerDelegate<TResponse>();
+public delegate Task RequestHandlerDelegate();
+
+// Queries et commandes avec réponse
+public interface IPipelineBehavior<in TRequest, TResponse>
+{
+    Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken);
+}
+
+// Commandes sans réponse (ADR-007)
+public interface IPipelineBehavior<in TRequest>
+{
+    Task Handle(
+        TRequest request,
+        RequestHandlerDelegate next,
+        CancellationToken cancellationToken);
+}
+```
+
+Enregistrement sur le builder fluide existant :
+
+```csharp
+services
+    .AddBrilliantMediator()
+    .AddQueryHandler<GetUserQuery, UserDto, GetUserQueryHandler>()
+    .AddPipelineBehavior<GetUserQuery, UserDto, LoggingBehavior>()   // le plus externe
+    .AddPipelineBehavior<GetUserQuery, UserDto, CachingBehavior>()
+    .AddCommandHandler<DeleteUserCommand, DeleteUserCommandHandler>()
+    .AddPipelineBehavior<DeleteUserCommand, AuditBehavior>()
+    .Build();
+```
+
+`AddPipelineBehavior` accepte un `ServiceLifetime` (`Scoped` par défaut, comme les handlers).
+Les behaviors sont résolus depuis **le scope du handler** (ADR-002) : un `DbContext` scoped
+est la même instance sur toute la chaîne.
+
+**Impact SemVer :** ajout de deux membres à `IHandlerRegistry`. Rupture de compilation pour un
+implémenteur tiers de cette interface — mais `IHandlerRegistry` est un point d'extension interne
+(sa propre documentation XML précise que le code applicatif doit dépendre d'`IMediator`), et
+`Mediator` en est la seule implémentation. Traité comme un ajout mineur : **v3.1.0**.
+Aucun changement pour les consommateurs d'`IMediator`.
+
 ### Source Generator — BrilliantMediator.SourceGenerator v3.0.0
 
 Référencer dans le `.csproj` cible :
@@ -123,6 +175,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 | 1.2.0 | Migration .NET 10 | 2026-03-20 |
 | 1.3.0 | BrilliantMediator.SourceGenerator — enregistrement zéro réflexion à la compilation | 2026-03-20 |
 | 3.0.0 | SOLID refactoring: ISP split (IMediator/IHandlerRegistry), CancellationToken, decouple ASP.NET | 2026-03-23 |
+| 3.1.0 | Pipeline behaviors sur commandes et queries (ADR-007 → ADR-012) | 2026-07-31 |
 
 ---
 
@@ -134,6 +187,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 | 2 | Nettoyage docs — suppression CHANGELOG/EXAMPLES/GUIDE | Livré (PR #9) |
 | 3 | BrilliantMediator.SourceGenerator | Livré |
 | 4 | SOLID refactoring: ISP/DIP + CancellationToken + decouple ASP.NET | Livré |
+| 5 | Pipeline behaviors | Livré |
 
 ---
 
@@ -246,13 +300,47 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 
 ---
 
+## Preuve mesurée — non-régression du chemin sans behavior
+
+Protocole : un banc dédié (console, `net10.0`, Release, `ServiceCollection` réel, handlers
+retournant une tâche déjà complétée) mesure `DispatchAsync<TCommand>` et
+`SendAsync<TQuery, TResponse>` **sans aucun behavior enregistré**. 50 000 itérations de
+préchauffage, puis 7 séries de 500 000 itérations ; on retient le minimum, plus robuste au bruit
+que la médiane sur une machine de développement. Les deux versions sont compilées côte à côte
+(`git worktree` sur `dev` pour la référence) et exécutées **en alternance**, trois paires
+successives, afin d'annuler la dérive thermique et l'ordonnancement de la machine.
+
+| Mesure | v3.0.0 (`dev`) | v3.1.0 (behaviors) | Écart |
+|---|---|---|---|
+| `DispatchAsync<TCommand>` | 183,5 ns/op | **157,9 ns/op** | −14 % |
+| `SendAsync<TQuery, TResponse>` | 236,6 ns/op | **211,5 ns/op** | −11 % |
+| Allocations `DispatchAsync<TCommand>` | 512 o/op | **424 o/op** | −17 % |
+
+La latence est bruitée sur la machine de mesure (médianes de 180 à 310 ns d'une série à l'autre,
+dans les deux versions) : seule la comparaison des minima est concluante. L'allocation, elle, est
+**déterministe** — 512 o dans les six exécutions de référence, 424 o dans les six exécutions
+modifiées, sans aucune dispersion. C'est la preuve la plus solide.
+
+Le gain n'est pas fortuit : le passage de la requête en paramètre explicite de
+`ExecuteInScopeAsync` — nécessaire pour la fournir aux behaviors — a permis de rendre `static`
+les lambdas d'invocation du handler, qui capturaient jusque-là la requête dans une fermeture
+allouée à chaque dispatch. Le chemin sans behavior ne régresse donc pas : il gagne une
+allocation par appel.
+
+`PerformanceTests.cs` (seuils : > 50 000 ops/s en commande, > 25 000 ops/s en requête) reste vert.
+
+---
+
 ## Dette technique
 
 Aucune dette structurelle identifiée après v3.0.0.
 
 **Abandonné intentionnellement:**
 - `MediatorOptions`, `MediatorDiagnosticEvent`, `MediatorEventType` — diagnostics sans cas d'usage clair
-- Middlewares — ajouteraient de la complexité sans bénéfice clair pour la majorité
+- ~~Middlewares — ajouteraient de la complexité sans bénéfice clair pour la majorité~~ — décision
+  révisée en v3.1.0 : un consommateur réel (application MAUI hors-ligne appliquant une politique de
+  cache *stale-while-revalidate* à toutes ses lectures) a dû se replier sur un décorateur DI écrit à
+  la main faute de point d'interception. Voir ADR-007 → ADR-012.
 - Instance registration methods — nécessitaient DI lookup, ajoutaient de la confusion
 - `AddHandlersFromAssembly*` — remplacé par le Source Generator (supprimé en v3.0.0)
 
@@ -261,7 +349,13 @@ Aucune dette structurelle identifiée après v3.0.0.
 ## Prochaine itération
 
 **Candidates:**
-- v3.1.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`
+- **Behaviors ouverts générés** — étendre `BrilliantMediator.SourceGenerator` pour émettre les
+  fermetures concrètes d'un behavior générique (`LoggingBehavior<TRequest, TResponse>`) sur tous les
+  couples `(TRequest, TResponse)` qu'il découvre déjà en scannant les handlers. Supprime la
+  verbosité assumée par ADR-010 sans introduire de réflexion. **À trancher :** l'ordre relatif entre
+  behaviors générés et behaviors enregistrés à la main (ADR-008), non résolu en v3.1.0.
+- ~~v3.1.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`~~ —
+  couvert par les pipeline behaviors : un `ValidationBehavior` court-circuite ou lève avant le handler.
 - Diagnostics dashboard (opt-in, external service)
 - `RegisterEventHandler<TEvent, THandler>()` — stocker les types concrets des event handlers pour ramener le coût du publish à N instanciations exactes (supprime le trade-off N + N² de l'ADR-006 et la dépendance à l'ordre de résolution MS.DI). Breaking change sur `IHandlerRegistry` — candidat v4.
 
