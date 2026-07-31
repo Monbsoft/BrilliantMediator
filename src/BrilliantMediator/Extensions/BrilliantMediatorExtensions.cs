@@ -4,6 +4,10 @@ using Monbsoft.BrilliantMediator.Core;
 
 namespace Monbsoft.BrilliantMediator.Extensions;
 
+/// <summary>
+/// Entry points wiring BrilliantMediator into a service collection and
+/// initializing it once the container is built.
+/// </summary>
 public static class BrilliantMediatorExtensions
 {
     /// <summary>

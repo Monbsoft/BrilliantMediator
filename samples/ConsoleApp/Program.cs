@@ -24,7 +24,7 @@ services
     .AddCommandHandler<CompleteTodoCommand, CompleteTodoResult, CompleteTodoCommandHandler>()
     .AddCommandHandler<DeleteTodoCommand, DeleteTodoCommandHandler>()
     .AddQueryHandler<GetAllTodosQuery, GetAllTodosResult, GetAllTodosQueryHandler>()
-    .AddQueryHandler<GetTodoByIdQuery, TodoDto, GetTodoByIdQueryHandler>()
+    .AddQueryHandler<GetTodoByIdQuery, TodoDto?, GetTodoByIdQueryHandler>()
     .AddQueryHandler<GetTodoStatsQuery, TodoStats, GetTodoStatsQueryHandler>()
     .Build();
 
@@ -32,7 +32,7 @@ var provider = services.BuildServiceProvider();
 provider.UseBrilliantMediator();
 var mediator = provider.GetRequiredService<IMediator>();
 
-var todoService = provider.GetService<TodoService>();
+var todoService = provider.GetRequiredService<TodoService>();
 
 // Demo
 try

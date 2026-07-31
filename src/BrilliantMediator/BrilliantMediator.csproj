@@ -1,22 +1,23 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
 	<IsPackable>true</IsPackable>
     <RootNamespace>Monbsoft.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
 	  <!-- Package info -->
 	  <PackageId>BrilliantMediator</PackageId>
 	  <Title>BrilliantMediator</Title>
 	  <Description>Ultra-lightweight, zero-reflection mediator for .NET with blazing performance</Description>
-	  <Version>3.0.0</Version>
+	  <Version>3.2.0</Version>
 	  <Authors>Monbsoft</Authors>
 	  <PackageProjectUrl>https://github.com/Monbsoft/BrilliantMediator</PackageProjectUrl>
 	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
 	  <RepositoryUrl>https://github.com/Monbsoft/BrilliantMediator</RepositoryUrl>
 	  <RepositoryType>git</RepositoryType>
-	  <PackageTags>mediator;cqrs;command;query;performance</PackageTags>
+	  <PackageTags>mediator;cqrs;command;query;performance;pipeline;behavior</PackageTags>
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

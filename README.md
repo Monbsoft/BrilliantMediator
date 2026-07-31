@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![.NET](https://img.shields.io/badge/.NET-10.0-blue)
 ![NuGet](https://img.shields.io/badge/NuGet-BrilliantMediator-blue)
-![Version](https://img.shields.io/badge/version-3.0.0-blue)
+![Version](https://img.shields.io/badge/version-3.2.0-blue)
 
 **Ultra-lightweight, zero-reflection mediator for .NET with blazing performance.**
 
@@ -18,6 +18,7 @@ BrilliantMediator is a high-performance implementation of the Mediator pattern t
 - 🔧 **Simple** - Easy to understand and maintain
 - 🌐 **Framework Agnostic** - Works with any .NET host (Console, Worker Service, ASP.NET Core)
 - 📋 **CQRS + Events** - Commands, Queries, and parallel Events out of the box
+- 🔗 **Pipeline Behaviors** - Compose logging, validation, caching or retry around any request
 - 🛠️ **Source Generator** - Zero-reflection handler registration generated at compile time
 
 ## Packages
@@ -223,6 +224,145 @@ public class AuditUserCreationHandler : IEventHandler<UserCreatedEvent>
 await mediator.PublishAsync(new UserCreatedEvent { UserId = userId, Email = "user@example.com" });
 ```
 
+### Pipeline Behaviors
+
+Behaviors wrap the execution of a command or a query — logging, validation, caching, retry, transactions.
+They compose into a chain around the handler, so cross-cutting logic lives in one place instead of
+being duplicated in every handler.
+
+```csharp
+using Monbsoft.BrilliantMediator.Abstractions.Pipeline;
+
+public class LoggingBehavior : IPipelineBehavior<GetUserQuery, UserDto>
+{
+    public async Task<UserDto> Handle(
+        GetUserQuery request,
+        RequestHandlerDelegate<UserDto> next,
+        CancellationToken cancellationToken)
+    {
+        Console.WriteLine($"-> {nameof(GetUserQuery)}");
+        var response = await next();   // runs the rest of the pipeline, then the handler
+        Console.WriteLine($"<- {nameof(GetUserQuery)}");
+        return response;
+    }
+}
+```
+
+Register behaviors on the same fluent builder:
+
+```csharp
+services
+    .AddBrilliantMediator()
+    .AddQueryHandler<GetUserQuery, UserDto, GetUserQueryHandler>()
+    .AddPipelineBehavior<GetUserQuery, UserDto, LoggingBehavior>()
+    .AddPipelineBehavior<GetUserQuery, UserDto, CachingBehavior>()
+    .Build();
+```
+
+#### Execution order
+
+Behaviors run in **registration order — the first registered is the outermost**:
+
+```
+LoggingBehavior   ->  CachingBehavior  ->  GetUserQueryHandler
+                  <-                   <-
+```
+
+#### Short-circuiting
+
+A behavior that never calls `next` returns without executing the handler. This is what makes
+read-through caching possible:
+
+```csharp
+public class CachingBehavior : IPipelineBehavior<GetUserQuery, UserDto>
+{
+    private readonly IUserCache _cache;
+
+    public CachingBehavior(IUserCache cache) => _cache = cache;
+
+    public async Task<UserDto> Handle(
+        GetUserQuery request,
+        RequestHandlerDelegate<UserDto> next,
+        CancellationToken cancellationToken)
+    {
+        if (_cache.TryGet(request.UserId, out var cached))
+            return cached;               // handler is never executed
+
+        var response = await next();
+        _cache.Set(request.UserId, response);
+        return response;
+    }
+}
+```
+
+Behaviors are resolved from the **same DI scope as the handler**, so a scoped `DbContext` is the
+same instance across the whole pipeline.
+
+#### Commands without response
+
+Commands that return nothing use the single-parameter interface and the non-generic delegate —
+there is no `Unit` type to carry around:
+
+```csharp
+public class AuditBehavior : IPipelineBehavior<DeleteUserCommand>
+{
+    public async Task Handle(
+        DeleteUserCommand request,
+        RequestHandlerDelegate next,
+        CancellationToken cancellationToken)
+    {
+        await next();
+        Console.WriteLine($"audited {nameof(DeleteUserCommand)}");
+    }
+}
+```
+
+```csharp
+services
+    .AddBrilliantMediator()
+    .AddCommandHandler<DeleteUserCommand, DeleteUserCommandHandler>()
+    .AddPipelineBehavior<DeleteUserCommand, AuditBehavior>()
+    .Build();
+```
+
+#### Reusing one behavior across requests
+
+The behavior class may be generic. Only the **registration** must name a closed type — the closure
+is built by the compiler, which keeps resolution free of reflection and safe under trimming and
+NativeAOT:
+
+```csharp
+public class TimingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+{
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.GetTimestamp();
+        var response = await next();
+        Console.WriteLine($"{typeof(TRequest).Name}: {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms");
+        return response;
+    }
+}
+```
+
+```csharp
+services
+    .AddBrilliantMediator()
+    .AddQueryHandler<GetUserQuery, UserDto, GetUserQueryHandler>()
+    .AddPipelineBehavior<GetUserQuery, UserDto, TimingBehavior<GetUserQuery, UserDto>>()
+    .Build();
+```
+
+> Registering an **open** generic (`typeof(IPipelineBehavior<,>)`) is deliberately not supported:
+> `Microsoft.Extensions.DependencyInjection` would build the closed type at resolution time via
+> `Type.MakeGenericType`, which is reflection on the dispatch path. See ADR-010 in
+> [`docs/spec.md`](docs/spec.md).
+
+Events have no pipeline — `PublishAsync` is unchanged (ADR-011). Dispatching a request with no
+behavior registered costs nothing: the mediator skips pipeline resolution entirely (ADR-012).
+
 ## Dependency Injection
 
 ### Manual registration (fluent builder)
@@ -347,6 +487,8 @@ void RegisterCommandHandler<TCommand>() where TCommand : ICommand;
 void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TResponse>;
 void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
 void RegisterEventHandler<TEvent>() where TEvent : IEvent;
+void RegisterPipelineBehavior<TRequest, TResponse>();
+void RegisterPipelineBehavior<TRequest>() where TRequest : ICommand;
 ```
 
 > **Note:** `IHandlerRegistry` is called internally by `UseBrilliantMediator()`. Application code should only depend on `IMediator`.

@@ -539,7 +539,7 @@ public class MediatorBuilderHandlerRegistrationTests
         }
 
         [Fact]
-        public void HandlerWithDependencies_DependenciesAreInjected()
+        public async Task HandlerWithDependencies_DependenciesAreInjected()
         {
             var services = new ServiceCollection();
             services.AddScoped<ITestService, TestService>();
@@ -553,8 +553,7 @@ public class MediatorBuilderHandlerRegistrationTests
             var handler = serviceProvider.GetService<ICommandHandler<BuilderTestCommand>>() as HandlerWithDependency;
 
             Assert.NotNull(handler);
-            var task = handler.Handle(new BuilderTestCommand());
-            task.Wait();
+            await handler.Handle(new BuilderTestCommand());
         }
 
         [Fact]

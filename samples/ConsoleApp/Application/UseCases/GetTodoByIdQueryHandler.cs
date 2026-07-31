@@ -5,7 +5,7 @@ using Radiant.ConsoleApp.Application.Queries;
 
 namespace Radiant.ConsoleApp.Application.UseCases;
 
-public class GetTodoByIdQueryHandler : IQueryHandler<GetTodoByIdQuery, TodoDto>
+public class GetTodoByIdQueryHandler : IQueryHandler<GetTodoByIdQuery, TodoDto?>
 {
     private readonly ITodoRepository _repository;
 
@@ -14,7 +14,7 @@ public class GetTodoByIdQueryHandler : IQueryHandler<GetTodoByIdQuery, TodoDto>
         _repository = repository;
     }
 
-    public async Task<TodoDto> Handle(GetTodoByIdQuery query, CancellationToken cancellationToken = default)
+    public async Task<TodoDto?> Handle(GetTodoByIdQuery query, CancellationToken cancellationToken = default)
     {
         var todo = await _repository.GetByIdAsync(query.TodoId);
         if (todo == null)

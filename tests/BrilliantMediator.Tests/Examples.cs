@@ -244,7 +244,10 @@ public class InMemoryTodoRepository : ITodoRepository
 
 public class Program
 {
-    public static async Task Main(string[] args)
+    // Named RunAsync rather than Main: a test assembly already has a generated
+    // entry point, and a second one only triggers CS8892 (this method is a
+    // documentation sample, never invoked).
+    public static async Task RunAsync(string[] args)
     {
         var (mediator, serviceProvider) = TestMediatorFactory.Create();
         var repository = new InMemoryTodoRepository();

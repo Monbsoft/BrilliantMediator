@@ -30,7 +30,7 @@ public class InMemoryTodoRepository : ITodoRepository
         return Task.CompletedTask;
     }
 
-    public Task<Todo> GetByIdAsync(int id)
+    public Task<Todo?> GetByIdAsync(int id)
     {
         var todo = _todos.Find(t => t.Id == id);
         return Task.FromResult(todo);
