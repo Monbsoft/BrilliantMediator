@@ -89,6 +89,13 @@ public sealed class MediatorBuilder
     /// <typeparamref name="TBehavior"/> may be a closed generic such as
     /// <c>LoggingBehavior&lt;GetUserQuery, UserDto&gt;</c>: the closure is built
     /// by the compiler, so resolution stays reflection-free (ADR-010).
+    /// <para>
+    /// <typeparamref name="TRequest"/> and <typeparamref name="TResponse"/> are not
+    /// constrained — the same pair serves queries and commands with response — so a
+    /// pair that matches no dispatched request still registers, and the behavior
+    /// silently never runs. Keep both type arguments identical to the handler
+    /// registration.
+    /// </para>
     /// </remarks>
     public MediatorBuilder AddPipelineBehavior<TRequest, TResponse, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Scoped)
         where TBehavior : class, IPipelineBehavior<TRequest, TResponse>
