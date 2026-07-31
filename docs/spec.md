@@ -1,7 +1,7 @@
 # BrilliantMediator — Spec & Architecture
 
 > Source de vérité du projet. Mise à jour à la fin de chaque itération.
-> Dernière mise à jour : 2026-07-31 — pipeline behaviors (ADR-007 → ADR-012)
+> Dernière mise à jour : 2026-07-31 — pipeline behaviors (ADR-007 → ADR-014)
 
 ---
 
@@ -43,7 +43,7 @@ void RegisterCommandHandler<TCommand, TResponse>() where TCommand : ICommand<TRe
 void RegisterQueryHandler<TQuery, TResponse>() where TQuery : IQuery<TResponse>;
 void RegisterEventHandler<TEvent>() where TEvent : IEvent;
 void RegisterPipelineBehavior<TRequest, TResponse>();   // v3.2.0
-void RegisterPipelineBehavior<TRequest>();              // v3.2.0
+void RegisterPipelineBehavior<TRequest>() where TRequest : ICommand;  // v3.2.0
 ```
 
 **Nota bene:**
@@ -111,8 +111,9 @@ public interface IPipelineBehavior<in TRequest, TResponse>
         CancellationToken cancellationToken);
 }
 
-// Commandes sans réponse (ADR-007)
+// Commandes sans réponse (ADR-007). TRequest contraint à ICommand (ADR-013)
 public interface IPipelineBehavior<in TRequest>
+    where TRequest : ICommand
 {
     Task Handle(
         TRequest request,
@@ -142,7 +143,8 @@ est la même instance sur toute la chaîne.
 implémenteur tiers de cette interface — mais `IHandlerRegistry` est un point d'extension interne
 (sa propre documentation XML précise que le code applicatif doit dépendre d'`IMediator`), et
 `Mediator` en est la seule implémentation. Traité comme un ajout mineur : **v3.2.0**.
-Aucun changement pour les consommateurs d'`IMediator`.
+Aucun changement pour les consommateurs d'`IMediator`. Déviation explicite d'un critère Bloquant
+d'`AGENTS.md`, actée et motivée par l'**ADR-014**.
 
 ### Source Generator — BrilliantMediator.SourceGenerator v3.2.0
 
@@ -175,7 +177,7 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 | 1.2.0 | Migration .NET 10 | 2026-03-20 |
 | 1.3.0 | BrilliantMediator.SourceGenerator — enregistrement zéro réflexion à la compilation | 2026-03-20 |
 | 3.0.0 | SOLID refactoring: ISP split (IMediator/IHandlerRegistry), CancellationToken, decouple ASP.NET | 2026-03-23 |
-| 3.2.0 | Pipeline behaviors sur commandes et queries (ADR-007 → ADR-012) | 2026-07-31 |
+| 3.2.0 | Pipeline behaviors sur commandes et queries (ADR-007 → ADR-014) | 2026-07-31 |
 
 ---
 
@@ -297,7 +299,25 @@ Le générateur produit `{AssemblyName}.Infrastructure.Generated.g.cs` contenant
 - **Décision :** deux gardes successives dans `Mediator`, avant toute allocation liée au pipeline.
   1. `private volatile bool _hasPipelineBehaviors` — passé à `true` au premier `RegisterPipelineBehavior*`. Faux dans toute application n'utilisant pas la fonctionnalité : lecture d'un champ booléen, le chemin d'exécution est alors **identique octet pour octet** au chemin v3.0.
   2. Si des behaviors existent quelque part, la clé `behavior_*` est construite et cherchée dans un `ConcurrentDictionary<string, bool>` dédié — une requête sans behavior ne déclenche aucune résolution DI. La construction de la clé (interpolation de chaîne) n'a lieu **que** derrière la première garde.
-- **Conséquences :** surcoût d'une lecture de champ volatile sur le chemin sans behavior. Mesuré : `alloc/op` inchangée à 512 B (métrique déterministe), latence dans le bruit de mesure — voir « Preuve mesurée » ci-dessous. Contrepartie : deux registres à maintenir en cohérence dans `Mediator`. Effet de bord bénéfique : le passage de la requête en paramètre explicite (au lieu de la capturer dans une fermeture) a permis de rendre `static` les lambdas d'invocation du handler.
+- **Conséquences :** surcoût d'une lecture de champ volatile sur le chemin sans behavior. Mesuré : `alloc/op` en baisse de 512 o à 424 o (−17 %, métrique déterministe), latence dans le bruit de mesure — voir « Preuve mesurée » ci-dessous. Contrepartie : deux registres à maintenir en cohérence dans `Mediator`, et une garde qui conditionne l'**exécution**, pas seulement la résolution — un behavior présent dans le conteneur mais dont le marqueur n'a pas été posé est ignoré silencieusement (enregistrement direct sur `IServiceCollection`, ou `AddPipelineBehavior` appelé après `Build()`). `MediatorBuilder.AddPipelineBehavior` pose les deux dans le même appel : c'est la seule voie supportée, et la documentation XML d'`IHandlerRegistry` le dit désormais explicitement. La baisse d'allocation n'est pas due aux gardes elles-mêmes mais à leur effet de bord : le passage de la requête en paramètre explicite (au lieu de la capturer dans une fermeture) a permis de rendre `static` les lambdas d'invocation du handler.
+
+### ADR-013 — `IPipelineBehavior<TRequest>` contraint à `ICommand`
+
+- **Contexte :** `ICommand<TResponse>` n'hérite pas de `ICommand` (ADR-007). Sans contrainte sur `TRequest`, `AddPipelineBehavior<CreateUserCommand, AuditBehavior>()` pour un `CreateUserCommand : ICommand<Guid>` compilait sans le moindre avertissement.
+- **Point dur :** l'échec était **silencieux**. L'enregistrement inscrivait la clé `behavior_CreateUserCommand`, alors que le dispatch d'une commande avec réponse interroge `behavior_resp_CreateUserCommand_System.Guid` : aucune correspondance, aucune exception, aucun log — le behavior n'était jamais exécuté. C'est le pire mode de défaillance pour un souci transverse (audit, validation, autorisation), dont l'absence ne se voit pas.
+- **Décision :** contraindre `TRequest` à `ICommand` sur les quatre déclarations concernées — `IPipelineBehavior<in TRequest>`, `IHandlerRegistry.RegisterPipelineBehavior<TRequest>()`, `Mediator.RegisterPipelineBehavior<TRequest>()` et `MediatorBuilder.AddPipelineBehavior<TRequest, TBehavior>()`. La contrainte est portée jusque sur l'interface pour que l'erreur se manifeste à l'écriture de la classe de behavior, et pas seulement à son enregistrement. L'erreur est désormais **CS0311** à la compilation.
+- **Justification de la portée :** le pipeline sans réponse n'est atteignable que depuis `DispatchAsync<TCommand>() where TCommand : ICommand` ; tout `TRequest` qui n'est pas un `ICommand` était donc, par construction, un enregistrement mort. La contrainte n'exclut aucun usage légitime. Elle aligne aussi la méthode sur toutes ses sœurs du builder, déjà contraintes depuis l'origine (`AddCommandHandler`, `AddQueryHandler`, `AddEventHandler`).
+- **Non traité :** la surcharge à trois paramètres `AddPipelineBehavior<TRequest, TResponse, TBehavior>()` conserve le même trou lorsque `TResponse` ne correspond pas à la réponse réelle de la requête. Il n'est pas exprimable en une contrainte unique, `IQuery<T>` et `ICommand<T>` n'ayant aucune base commune. Candidat à un diagnostic du source generator.
+- **Conséquences :** API neuve de cette itération, donc contrainte ajoutée avant publication — aucun code existant n'est cassé, et c'était le seul moment pour le faire sans rupture. Un behavior générique doit désormais propager la contrainte : `class AuditBehavior<TRequest> : IPipelineBehavior<TRequest> where TRequest : ICommand`.
+
+### ADR-014 — Ajout de membres à `IHandlerRegistry` en version mineure
+
+- **Contexte :** cette itération ajoute `RegisterPipelineBehavior<TRequest, TResponse>()` et `RegisterPipelineBehavior<TRequest>()` à `IHandlerRegistry`, interface **publique**. Les membres n'ont pas d'implémentation par défaut : un implémenteur tiers ne compile plus (CS0535), et un assemblage tiers déjà compilé échoue au chargement du type. La version passe de 3.0.0 à 3.2.0 — un bump **mineur**.
+- **Point dur :** `AGENTS.md` classe « Rupture de l'API publique sans bump de version majeure (SemVer) » parmi les critères **Bloquants**. Par ailleurs, le présent document affirmait déjà — avant cette itération, à « Prochaine itération » — qu'ajouter `RegisterEventHandler<TEvent, THandler>()` à cette même interface constituait un « Breaking change sur `IHandlerRegistry` — candidat v4 ». Trancher en mineur ici contredisait ce précédent sans le dire.
+- **Décision :** conserver **v3.2.0**, et acter explicitement que `IHandlerRegistry` n'est pas une surface d'extension destinée aux tiers. Sa propre documentation XML l'énonce déjà (« Application code should depend on `IMediator` for dispatching, not this interface ») ; `Mediator` en est la seule implémentation ; `UseBrilliantMediator()` est le seul appelant. Le contrat public réellement exposé aux consommateurs est `IMediator`, et il est inchangé.
+- **Ce que cette décision annule :** le précédent « candidat v4 » cité ci-dessus, pour ce qu'il implique du *versionnage*. La règle retenue désormais : l'ajout de membres à `IHandlerRegistry` est un changement **mineur** ; seule une modification d'`IMediator`, des interfaces de messages (`ICommand`, `IQuery`, `IEvent`) ou des interfaces de handlers déclenche un bump majeur. `RegisterEventHandler<TEvent, THandler>()` reste une évolution souhaitable de l'ADR-006, mais elle n'a plus à attendre une v4 pour ce seul motif.
+- **Contrepartie assumée :** c'est une déviation explicite d'un critère Bloquant d'`AGENTS.md`, pas une exception que ce dernier prévoit. Elle est prise en connaissance de cause et tracée ici plutôt que laissée implicite dans un paragraphe de prose. Si `IHandlerRegistry` devait un jour être promue en point d'extension supporté, cette décision serait à réexaminer et la règle à réaligner sur `AGENTS.md`.
+- **Conséquences :** aucun changement pour les consommateurs d'`IMediator`, qui sont la totalité des usages documentés. Le risque résiduel porte sur les doublures de test écrites à la main qui implémenteraient `IHandlerRegistry` : elles doivent ajouter deux membres.
 
 ---
 
@@ -341,7 +361,7 @@ Aucune dette structurelle identifiée après v3.0.0.
 - ~~Middlewares — ajouteraient de la complexité sans bénéfice clair pour la majorité~~ — décision
   révisée en v3.2.0 : un consommateur réel (application MAUI hors-ligne appliquant une politique de
   cache *stale-while-revalidate* à toutes ses lectures) a dû se replier sur un décorateur DI écrit à
-  la main faute de point d'interception. Voir ADR-007 → ADR-012.
+  la main faute de point d'interception. Voir ADR-007 → ADR-014.
 - Instance registration methods — nécessitaient DI lookup, ajoutaient de la confusion
 - `AddHandlersFromAssembly*` — remplacé par le Source Generator (supprimé en v3.0.0)
 
@@ -358,6 +378,7 @@ Aucune dette structurelle identifiée après v3.0.0.
 - ~~v3.2.0 — Explicit validation hook: `Action<IMediatorValidator>` in `MediatorBuilder`~~ —
   couvert par les pipeline behaviors : un `ValidationBehavior` court-circuite ou lève avant le handler.
 - Diagnostics dashboard (opt-in, external service)
-- `RegisterEventHandler<TEvent, THandler>()` — stocker les types concrets des event handlers pour ramener le coût du publish à N instanciations exactes (supprime le trade-off N + N² de l'ADR-006 et la dépendance à l'ordre de résolution MS.DI). Breaking change sur `IHandlerRegistry` — candidat v4.
+- `RegisterEventHandler<TEvent, THandler>()` — stocker les types concrets des event handlers pour ramener le coût du publish à N instanciations exactes (supprime le trade-off N + N² de l'ADR-006 et la dépendance à l'ordre de résolution MS.DI). Ajout de membre à `IHandlerRegistry` : traité en **mineur** depuis l'ADR-014, cette évolution n'attend donc plus une v4.
+- Diagnostic du source generator sur la surcharge `AddPipelineBehavior<TRequest, TResponse, TBehavior>()` lorsque `TResponse` ne correspond pas à la réponse réelle de la requête — le seul cas de désalignement encore silencieux après l'ADR-013, non exprimable en contrainte générique.
 
 À valider lors de la prochaine session.
