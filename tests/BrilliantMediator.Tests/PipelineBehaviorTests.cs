@@ -299,6 +299,46 @@ public class ShortCircuitCommandBehavior : IPipelineBehavior<PipelineCommand>
 }
 
 /// <summary>
+/// Command with response (ADR-007): goes through the same two-parameter behavior
+/// interface as queries, but is dispatched via <c>DispatchAsync</c>.
+/// </summary>
+public class PipelineResponseCommand : ICommand<PipelineResponse>
+{
+    public string Value { get; set; } = string.Empty;
+}
+
+public class PipelineResponseCommandHandler : ICommandHandler<PipelineResponseCommand, PipelineResponse>
+{
+    private readonly PipelineTrace _trace;
+
+    public PipelineResponseCommandHandler(PipelineTrace trace) => _trace = trace;
+
+    public Task<PipelineResponse> Handle(PipelineResponseCommand command, CancellationToken cancellationToken = default)
+    {
+        _trace.Record("handler");
+        return Task.FromResult(new PipelineResponse { Value = $"handled:{command.Value}" });
+    }
+}
+
+public class TracingResponseCommandBehavior : IPipelineBehavior<PipelineResponseCommand, PipelineResponse>
+{
+    private readonly PipelineTrace _trace;
+
+    public TracingResponseCommandBehavior(PipelineTrace trace) => _trace = trace;
+
+    public async Task<PipelineResponse> Handle(
+        PipelineResponseCommand request,
+        RequestHandlerDelegate<PipelineResponse> next,
+        CancellationToken cancellationToken)
+    {
+        _trace.Record("response-command-behavior:before");
+        var response = await next();
+        _trace.Record("response-command-behavior:after");
+        return response;
+    }
+}
+
+/// <summary>
 /// Second query type, used to prove behaviors do not leak across request types.
 /// </summary>
 public class OtherPipelineQuery : IQuery<PipelineResponse>
@@ -647,6 +687,26 @@ public class PipelineBehaviorTests
 
         Assert.Equal(
             new[] { "command-behavior:before", "handler", "command-behavior:after" },
+            provider.GetRequiredService<PipelineTrace>().Steps);
+    }
+
+    // ------------------------------------------------------------------
+    // Commands with response (ADR-007)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task DispatchAsync_CommandWithResponseAndBehavior_ExecutesBehaviorAroundHandler()
+    {
+        var (mediator, provider) = Build(builder => builder
+            .AddCommandHandler<PipelineResponseCommand, PipelineResponse, PipelineResponseCommandHandler>()
+            .AddPipelineBehavior<PipelineResponseCommand, PipelineResponse, TracingResponseCommandBehavior>());
+
+        var response = await mediator.DispatchAsync<PipelineResponseCommand, PipelineResponse>(
+            new PipelineResponseCommand { Value = "x" });
+
+        Assert.Equal("handled:x", response.Value);
+        Assert.Equal(
+            new[] { "response-command-behavior:before", "handler", "response-command-behavior:after" },
             provider.GetRequiredService<PipelineTrace>().Steps);
     }
 
